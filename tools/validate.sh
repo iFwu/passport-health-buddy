@@ -38,7 +38,53 @@ run_static_checks() {
         tests/test_plank_storage.c main/plank_storage.c main/plank_core.c \
         -o "${test_dir}/test_plank_storage"
     "${test_dir}/test_plank_storage"
-    python3 -B tests/test_verify_firmware.py
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \
+        tests/test_demo_navigation.c main/demo_navigation.c \
+        -o "${test_dir}/test_demo_navigation"
+    "${test_dir}/test_demo_navigation"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \
+        tests/test_key_guard.c -o "${test_dir}/test_key_guard"
+    "${test_dir}/test_key_guard"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Icomponents/bsp/src \
+        tests/test_bsp_display_rounding.c components/bsp/src/bsp_display_rounding.c \
+        -o "${test_dir}/test_bsp_display_rounding"
+    "${test_dir}/test_bsp_display_rounding"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Icomponents/bsp/src \
+        tests/test_bsp_es8311_sleep_check.c components/bsp/src/bsp_es8311_sleep_check.c \
+        -o "${test_dir}/test_bsp_es8311_sleep_check"
+    "${test_dir}/test_bsp_es8311_sleep_check"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror \
+        -Itests/bsp_stubs -Icomponents/bsp/include \
+        tests/test_bsp_button.c -o "${test_dir}/test_bsp_button"
+    "${test_dir}/test_bsp_button"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror \
+        -Itests/bsp_stubs -Icomponents/bsp/include \
+        tests/test_bsp_lvgl_init.c components/bsp/src/bsp_display_rounding.c \
+        -o "${test_dir}/test_bsp_lvgl_init"
+    "${test_dir}/test_bsp_lvgl_init"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror \
+        -Itests/audio_stubs -Icomponents/bsp/include -Icomponents/bsp/src \
+        tests/test_bsp_audio_recovery.c components/bsp/src/bsp_es8311_sleep_check.c \
+        -o "${test_dir}/test_bsp_audio_recovery"
+    "${test_dir}/test_bsp_audio_recovery"
+    # Apple ld rejects --gc-sections; -dead_strip is the local equivalent.
+    local section_gc="--gc-sections"
+    if [[ "$(uname -s)" == "Darwin" ]]; then
+        section_gc="-dead_strip"
+    fi
+    for demo in audio low_power ble wifi; do
+        "${CC:-cc}" -std=c11 -Wall -Wextra -Werror \
+            -ffunction-sections -fdata-sections -Itests/demo_stubs -Imain \
+            "tests/test_demo_${demo}_runtime.c" -Wl,"${section_gc}" \
+            -o "${test_dir}/test_demo_${demo}_runtime"
+        "${test_dir}/test_demo_${demo}_runtime"
+    done
+    PYTHONDONTWRITEBYTECODE=1 python3 tests/test_deep_sleep_contract.py
+    PYTHONDONTWRITEBYTECODE=1 python3 tests/test_key_wake_contract.py
+    PYTHONDONTWRITEBYTECODE=1 python3 tests/test_check_repo.py
+    PYTHONDONTWRITEBYTECODE=1 python3 tests/test_verify_firmware.py
+    PYTHONDONTWRITEBYTECODE=1 python3 tests/test_archive_firmware.py
+    PYTHONDONTWRITEBYTECODE=1 python3 tests/test_install_passport_skills.py
     rm -rf "${test_dir}"
     echo "Host tests: PASS"
 }
@@ -60,6 +106,8 @@ run_firmware_checks() (
     idf.py -B "${validation_build_dir}" merge-bin \
         -o "${validation_build_dir}/FoloToy-AI-Passport-full.bin"
     python3 tools/verify_firmware.py "${validation_build_dir}"
+    PYTHONDONTWRITEBYTECODE=1 python3 tools/archive_firmware.py create \
+        "${validation_build_dir}" --archive-root "${repo_root}/build/firmware"
     mkdir -p "${repo_root}/build"
     mkdir -p "${repo_root}/build/verified"
     install -m 0644 "${validation_build_dir}/bootloader/bootloader.bin" "${repo_root}/build/verified/bootloader.bin"

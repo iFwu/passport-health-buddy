@@ -3,7 +3,7 @@
 ## 知识
 
 - [仓库：用户手册](../plank-trainer.md)。本应用的按键、记录和错误语义；实际应用行为以代码与验证结果为准。
-- [仓库：BLE Recovery 兼容合同](../development/engineering/ble-recovery-compatibility.zh_CN.md)。解释 UP 开机持续五秒入口、主应用大小和受保护区域。
+- [仓库：固件布局](../development/engineering/firmware-layout.zh_CN.md)。说明默认只有 NVS、PHY data 和 factory 应用，以及合并镜像与分段烧录的差别。
 - [Espressif：Application Startup Flow，ESP-IDF 5.5.3 / ESP32-C3](https://docs.espressif.com/projects/esp-idf/en/v5.5.3/esp32c3/api-guides/startup.html)。用于解释 ROM、第二阶段 bootloader、分区表与 `app_main()` 的启动链。
 - [Espressif：Non-Volatile Storage Library，ESP-IDF 5.5.3 / ESP32-C3](https://docs.espressif.com/projects/esp-idf/en/v5.5.3/esp32c3/api-reference/storage/nvs_flash.html)。用于解释 `nvs_commit()`、Flash 保存与写入过程中突然掉电的边界；官方要求设置值之后调用 commit 才能保证提交。
 - [Espressif：USB Serial/JTAG Controller Console，ESP-IDF 5.5.3 / ESP32-C3](https://docs.espressif.com/projects/esp-idf/en/v5.5.3/esp32c3/api-guides/usb-serial-jtag-console.html)。用于解释 USB 串口通信和烧录，不等同于向 U 盘复制文件。

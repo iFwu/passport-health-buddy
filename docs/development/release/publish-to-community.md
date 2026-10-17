@@ -12,7 +12,7 @@ Use this when the project is being **released** — that is, when the code is fi
 
 When the developer says "publish" or "release", the first thing to decide is **where** to publish. Do not assume a route.
 
-- **To the community** — release the firmware to the [AI Passport Community market](https://ai-passport.folotoy.cn). Use the publisher workflow below. See also the project completion flow (`docs/development/project-completion.md`) once it is published.
+- **To the community** — release the firmware to the [AI Passport Community market](https://ai-passport.folotoy.cn). Use the publisher workflow below. See also the [project completion flow](project-completion.md) once it is published.
 - **To Git** — publish the finished code to a version-controlled repository. The flow is: commit the finished code, then open a release for it. The release artifact may be produced by the CI/CD pipeline (**recommended**, tag-triggered via `.github/workflows/build-firmware.yml`), or it may be a local `.bin` the developer already built. Follow the repository commit and PR rules (`docs/contribution/commit-and-pr.md`) and the fork workflow (`docs/fork-guide.md`); see [`CI-build-and-release.md`](../ci/CI-build-and-release.md) for the automated build and release artifacts.
 - **Neither yet** — the code is not finished and usable; keep developing, do not publish.
 
@@ -29,7 +29,7 @@ The skill's `SKILL.md` defines the exact workflow: inspect the project, prepare 
 - **Firmware**: the single merged ESP image
   `build/FoloToy-AI-Passport-full.bin`. It must pass
   `./tools/validate.sh --firmware`, including the
-  [mini-program BLE compatibility contract](../engineering/ble-recovery-compatibility.md).
+  [configured firmware layout](../engineering/firmware-layout.md).
   Never substitute the app-only `.bin` produced by `idf.py build`.
 - **Cover**: a representative JPEG / PNG / WebP image (<= 10 MiB).
 - **Source**: the public HTTPS Git page for the firmware repository — GitHub, Gitee, GitLab, Codeberg, or another publicly reachable HTTPS Git repository page. A fork owner publishes from their fork's source page, resolved from `git remote -v`.
@@ -40,22 +40,24 @@ The skill's `SKILL.md` defines the exact workflow: inspect the project, prepare 
 - Validation, drafting, and preview that is not confirmed by the author does **not** authorize upload.
 - Authorization credentials are never requested, received, or stored by the assistant. The creator registers or signs in on the official site and approves the displayed code; the assistant never handles their password.
 - Never retry a rejected upload automatically. Report the server response and resolve the cause with the creator first.
-- Do not weaken, bypass, or remove the BLE compatibility gate merely to make a
+- Do not weaken, bypass, or remove the firmware-layout gate merely to make a
   community submission pass. Fix the image layout or build packaging instead.
 
 ## How the assistant installs the skill
 
 The assistant fetches the official bundle from the URL in the prompt and follows the workflow described in its `SKILL.md`. No skill needs to be kept or committed in this repository; the prompt reproduces the official install source each time.
 
-## After publishing: archive to plays
+## After publishing: archive to reference
 
 Once the firmware is published, ask the developer whether to archive this application
-into the upstream repository's [`plays/`](../../reference/README.md) application
+into the upstream repository's [`docs/reference/`](../../reference/README.md) application
 archive. If they agree, generate an AI-generated functional summary for the application under
-`plays/<username>/<app-name>/` (bilingual `README.md` / `.zh_CN.md`). The archive is
+the repository-relative `docs/reference/<username>/<app-name>/` (bilingual
+`README.md` / `.zh_CN.md`). The archive is
 **text-only**: record the cover image only by its file name and format as publish
-metadata, and do **not** commit the cover image into `plays/` (see the convention in
-[`plays/README.md`](../../reference/README.md)). Do not store the firmware `.bin` here
+metadata, and do **not** commit the cover image into `docs/reference/` (see the convention in
+[`docs/reference/README.md`](../../reference/README.md)). Register the application
+in both language versions of that index. Do not store the firmware `.bin` here
 either. Use the `plays-archive` skill, which opens the archive PR against the
 upstream `FoloToy/ai-passport`.
 

@@ -1,6 +1,7 @@
 // main/demo_wifi.c —— STA 模式扫描附近 AP，不连接网络、不保存凭证。
 #include "demo.h"
 #include "demo_radio.h"
+#include "bsp_display.h"
 #include "ui_pixel.h"
 
 #include "esp_event.h"
@@ -59,19 +60,31 @@ static esp_err_t start_scan(void)
     return err;
 }
 
-static esp_err_t wifi_start(void)
+static void wifi_stack_stop(void);
+
+esp_err_t demo_wifi_start(void)
 {
+    if (s_sta_netif || s_wifi_initialized) return ESP_ERR_INVALID_STATE;
     s_state = WIFI_DEMO_STARTING;
     esp_err_t err = demo_radio_nvs_prepare();
     if (err != ESP_OK) goto fail;
     err = demo_radio_network_prepare();
     if (err != ESP_OK) goto fail;
 
-    s_sta_netif = esp_netif_create_default_wifi_sta();
+    // The convenience creator asserts/aborts on allocation or handler failure.
+    // Use its checked steps so this optional demo can fail without rebooting.
+    esp_netif_config_t netif_cfg = ESP_NETIF_DEFAULT_WIFI_STA();
+    s_sta_netif = esp_netif_new(&netif_cfg);
     if (!s_sta_netif) {
         err = ESP_ERR_NO_MEM;
         goto fail;
     }
+    // attach records the netif even on failure; destroy_default_wifi below also
+    // clears that registration and any partially attached driver/handlers.
+    err = esp_netif_attach_wifi_station(s_sta_netif);
+    if (err != ESP_OK) goto fail;
+    err = esp_wifi_set_default_wifi_sta_handlers();
+    if (err != ESP_OK) goto fail;
 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     err = esp_wifi_init(&cfg);
@@ -91,9 +104,12 @@ static esp_err_t wifi_start(void)
     if (err != ESP_OK) goto fail;
     s_wifi_started = true;
 
-    return start_scan();
+    err = start_scan();
+    if (err != ESP_OK) goto fail;
+    return ESP_OK;
 
 fail:
+    wifi_stack_stop();
     s_error = err;
     s_state = WIFI_DEMO_FAILED;
     ESP_LOGE(TAG, "Wi-Fi 初始化失败: %s", esp_err_to_name(err));
@@ -153,7 +169,7 @@ static void tick(lv_timer_t *timer)
     }
 }
 
-static void wifi_stop(void)
+static void wifi_stack_stop(void)
 {
     if (s_wifi_started) {
         esp_wifi_scan_stop();
@@ -174,6 +190,12 @@ static void wifi_stop(void)
         s_sta_netif = NULL;
     }
     s_state = WIFI_DEMO_OFF;
+}
+
+esp_err_t demo_wifi_stop(void)
+{
+    wifi_stack_stop();
+    return ESP_OK;
 }
 
 void demo_wifi_enter(void)
@@ -197,7 +219,7 @@ void demo_wifi_enter(void)
     ui_pixel_mascot_create(s_scr, 101, 246);
     s_timer = lv_timer_create(tick, 100, NULL);
     lv_screen_load(s_scr);
-    wifi_start();
+    s_state = WIFI_DEMO_STARTING;
 }
 
 void demo_wifi_exit(void)
@@ -206,7 +228,6 @@ void demo_wifi_exit(void)
         lv_timer_delete(s_timer);
         s_timer = NULL;
     }
-    wifi_stop();
     if (s_scr) {
         lv_obj_delete(s_scr);
         s_scr = NULL;
@@ -217,6 +238,8 @@ void demo_wifi_exit(void)
 void demo_wifi_key(bsp_btn_t btn, bsp_btn_ev_t ev)
 {
     if (btn != BSP_BTN_OK || ev != BSP_BTN_CLICK || s_state != WIFI_DEMO_OFF) return;
+    if (!bsp_lvgl_lock(250)) return;
     lv_label_set_text(s_results, "RSSI  SSID  CHANNEL");
-    start_scan();
+    bsp_lvgl_unlock();
+    (void)start_scan();
 }

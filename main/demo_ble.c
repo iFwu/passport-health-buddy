@@ -6,18 +6,20 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
+#include "freertos/task.h"
 #include "host/ble_gap.h"
 #include "host/ble_hs.h"
 #include "host/util/util.h"
 #include "lvgl.h"
 #include "nimble/nimble_port.h"
-#include "nimble/nimble_port_freertos.h"
 #include "services/gap/ble_svc_gap.h"
 #include "services/gatt/ble_svc_gatt.h"
 #include <string.h>
 
 static const char *TAG = "demo_ble";
 static const char *DEVICE_NAME = "FoloPassport";
+
+#define BLE_STOP_TIMEOUT_MS 2000
 
 typedef enum {
     BLE_DEMO_OFF = 0,
@@ -30,11 +32,14 @@ static lv_obj_t *s_scr;
 static lv_obj_t *s_status;
 static lv_timer_t *s_timer;
 static SemaphoreHandle_t s_host_stopped;
+static TaskHandle_t s_host_task;
 static volatile ble_demo_state_t s_state;
 static volatile int s_error;
 static uint8_t s_addr_type;
 static bool s_initialized;
-static bool s_start_requested;
+static volatile bool s_start_requested;
+static bool s_stop_in_progress;
+static bool s_host_done;
 
 static int gap_event(struct ble_gap_event *event, void *arg);
 
@@ -91,11 +96,13 @@ static void host_task(void *arg)
 {
     (void)arg;
     nimble_port_run();
-    if (s_host_stopped) xSemaphoreGive(s_host_stopped);
-    nimble_port_freertos_deinit();
+    // Do not use the port wrapper: it keeps a private task handle and ignores
+    // task-creation failure. This demo owns creation, acknowledgement and deletion.
+    xSemaphoreGive(s_host_stopped);
+    for (;;) vTaskSuspend(NULL);
 }
 
-static esp_err_t ble_start(void)
+esp_err_t demo_ble_start(void)
 {
     if (s_initialized) {
         s_error = ESP_ERR_INVALID_STATE;
@@ -104,6 +111,8 @@ static esp_err_t ble_start(void)
     }
 
     s_state = BLE_DEMO_STARTING;
+    s_stop_in_progress = false;
+    s_host_done = false;
     esp_err_t err = demo_radio_nvs_prepare();
     if (err != ESP_OK) {
         s_error = err;
@@ -120,55 +129,92 @@ static esp_err_t ble_start(void)
     s_initialized = true;
     s_host_stopped = xSemaphoreCreateBinary();
     if (!s_host_stopped) {
-        nimble_port_deinit();
-        s_initialized = false;
-        s_error = ESP_ERR_NO_MEM;
-        s_state = BLE_DEMO_FAILED;
-        return ESP_ERR_NO_MEM;
+        err = ESP_ERR_NO_MEM;
+        goto failed_start;
     }
 
     ble_svc_gap_init();
     ble_svc_gatt_init();
     int rc = ble_svc_gap_device_name_set(DEVICE_NAME);
     if (rc != 0) {
-        vSemaphoreDelete(s_host_stopped);
-        s_host_stopped = NULL;
-        nimble_port_deinit();
-        s_initialized = false;
-        s_error = rc;
-        s_state = BLE_DEMO_FAILED;
-        return ESP_FAIL;
+        ESP_LOGE(TAG, "NimBLE device name failed: %d", rc);
+        err = ESP_FAIL;
+        goto failed_start;
     }
 
     ble_hs_cfg.reset_cb = on_reset;
     ble_hs_cfg.sync_cb = on_sync;
     s_start_requested = true;
-    nimble_port_freertos_init(host_task);
+    if (xTaskCreatePinnedToCore(host_task, "nimble_host", NIMBLE_HS_STACK_SIZE,
+                               NULL, configMAX_PRIORITIES - 4, &s_host_task,
+                               NIMBLE_CORE) != pdPASS) {
+        err = ESP_ERR_NO_MEM;
+        goto failed_start;
+    }
     return ESP_OK;
+
+failed_start:
+    // No host task exists, so nimble_port_stop() would return BLE_HS_EALREADY.
+    // Directly deinitialize; retain ownership if cleanup itself needs a retry.
+    s_start_requested = false;
+    esp_err_t cleanup = demo_ble_stop();
+    if (cleanup != ESP_OK) {
+        ESP_LOGE(TAG, "NimBLE startup cleanup failed: %s", esp_err_to_name(cleanup));
+    }
+    s_error = err;
+    s_state = BLE_DEMO_FAILED;
+    return err;
 }
 
-static void ble_stop(void)
+esp_err_t demo_ble_stop(void)
 {
     s_start_requested = false;
-    if (!s_initialized) return;
+    if (!s_initialized) return ESP_OK;
 
-    ble_gap_adv_stop();
-    int rc = nimble_port_stop();
-    if (rc == 0 && s_host_stopped) {
-        // host callback 不访问 LVGL；即使页面 exit 持有 LVGL 锁也不会形成锁环。
-        xSemaphoreTake(s_host_stopped, portMAX_DELAY);
+    if (s_host_task && !s_stop_in_progress) {
+        (void)ble_gap_adv_stop();
+        int rc = nimble_port_stop();
+        if (rc != 0) {
+            ESP_LOGE(TAG, "nimble_port_stop 失败: %d", rc);
+            s_error = rc;
+            s_state = BLE_DEMO_FAILED;
+            return ESP_FAIL;
+        }
+        s_stop_in_progress = true;
     }
-    if (rc == 0) {
-        nimble_port_deinit();
-        s_initialized = false;
-    } else {
-        ESP_LOGE(TAG, "nimble_port_stop 失败: %d", rc);
+
+    if (s_host_task && !s_host_done) {
+        if (!s_host_stopped ||
+            xSemaphoreTake(s_host_stopped, pdMS_TO_TICKS(BLE_STOP_TIMEOUT_MS)) != pdTRUE) {
+            ESP_LOGE(TAG, "等待 NimBLE host 停止超时");
+            s_error = ESP_ERR_TIMEOUT;
+            s_state = BLE_DEMO_FAILED;
+            return ESP_ERR_TIMEOUT;
+        }
+        s_host_done = true;
     }
-    if (!s_initialized && s_host_stopped) {
+
+    if (s_host_task) {
+        vTaskDelete(s_host_task);
+        s_host_task = NULL;
+    }
+
+    esp_err_t err = nimble_port_deinit();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "nimble_port_deinit 失败: %s", esp_err_to_name(err));
+        s_error = err;
+        s_state = BLE_DEMO_FAILED;
+        return err;
+    }
+    s_initialized = false;
+    s_stop_in_progress = false;
+    s_host_done = false;
+    if (s_host_stopped) {
         vSemaphoreDelete(s_host_stopped);
         s_host_stopped = NULL;
     }
     s_state = BLE_DEMO_OFF;
+    return ESP_OK;
 }
 
 static void tick(lv_timer_t *timer)
@@ -203,7 +249,7 @@ void demo_ble_enter(void)
     ui_pixel_mascot_create(s_scr, 101, 244);
     s_timer = lv_timer_create(tick, 100, NULL);
     lv_screen_load(s_scr);
-    ble_start();
+    s_state = BLE_DEMO_STARTING;
 }
 
 void demo_ble_exit(void)
@@ -212,7 +258,6 @@ void demo_ble_exit(void)
         lv_timer_delete(s_timer);
         s_timer = NULL;
     }
-    ble_stop();
     if (s_scr) {
         lv_obj_delete(s_scr);
         s_scr = NULL;
@@ -222,7 +267,8 @@ void demo_ble_exit(void)
 
 void demo_ble_key(bsp_btn_t btn, bsp_btn_ev_t ev)
 {
-    if (btn != BSP_BTN_OK || ev != BSP_BTN_CLICK || !s_initialized) return;
+    if (btn != BSP_BTN_OK || ev != BSP_BTN_CLICK ||
+        !s_initialized || s_state != BLE_DEMO_ADVERTISING) return;
     ble_gap_adv_stop();
     int rc = advertise();
     if (rc != 0) {

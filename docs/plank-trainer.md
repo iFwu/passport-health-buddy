@@ -51,9 +51,9 @@
 
 已有秒表应用可以计时；本应用新增专用开机界面、三键操作与持久记录。源码经 ESP-IDF 5.5.3 编译为 `.bin`，安装进 Flash 后，bootloader 启动应用，设备即可离线运行。复用 BSP，不需要换硬件或重写驱动；未假设设备目前安装了哪个应用。
 
-安装前需要核对实际产物、分区和目标设备，再单独确认烧录。主应用上限 3 MB；设备身份 `cardid` 位于 `0x356000`，permanent Recovery 位于 `0x700000`，不能擦除或覆盖。仓库保留开机持续按 UP 五秒进入 Recovery 的 hook；设备当前 Recovery 是否完好尚未验证。
+安装前需要核对实际产物、分区和目标设备，再单独确认烧录。当前默认分区只有 NVS、PHY data，以及从 `0x10000` 起、大小 `0x7F0000` 的 factory 应用。仓库不再预留 `cardid` 或 `0x700000` Recovery，也没有开机长按 UP 进入 Recovery 的 bootloader hook。合并镜像从 `0x0` 写入，可能覆盖这些旧区域和 NVS。2026-09-07 实测时设备分区表仍包含 `cardid` 与 Recovery；在按新布局整片烧录之前，不要假定它们还在。
 
-不要运行 `erase-flash`，也不要把任意 `.bin` 当成可写到 `0x0` 的完整镜像。app-only、merged image 与分段安装的用途见[兼容合同](development/engineering/ble-recovery-compatibility.zh_CN.md)。本手册不自动授权安装、擦除或设备重启。
+不要把 `erase-flash` 当作常规步骤，也不要把应用单镜像当成可写到 `0x0` 的完整镜像。分区、合并镜像与分段烧录见[固件布局](development/engineering/firmware-layout.zh_CN.md)。本手册不自动授权安装、擦除或设备重启。
 
 ## 真机验收
 

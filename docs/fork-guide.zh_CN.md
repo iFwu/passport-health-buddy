@@ -49,6 +49,8 @@ fork 后，`main` 分支**只允许增加/修改根目录的 `README.md` 和 `do
 - 上游 main 的根目录**故意不放 README**，把这一位置预留给 fork 开发者。上游项目说明位于 `docs/README.md`（GitHub 从 docs/ 识别主 README），不占用根目录。
 - 开发者 fork 项目后，可将**自己的内容**写到根目录的 `README.md`，以介绍 fork 后的项目——例如改动来源、二次开发说明、自定义用法等。这样 fork 的根目录 README 与上游互不冲突，也无需覆盖上游文档。
 
+根 README 的内容跟分支模型一致：`feature/*` 分支的根 README 只介绍本分支自己的应用——做什么、怎么用、相关说明；fork `main` 的根 README 才是全部项目的目录，每个应用一段，在应用发布或归档时刷新。不要把整份目录复制到功能分支，也不要把 `main` 的目录简化成一串链接。
+
 > **GitHub 显示行为**：GitHub 显示优先级为根目录 `README.md` > `docs/README.md`，因此 fork 用户在根目录自建 `README.md` 后即覆盖 `docs/README.md` 的显示——正契合上面"根目录 README 预留给开发者"的设计意图。
 
 ## docs/assets 使用约定
@@ -65,5 +67,6 @@ fork 后，`main` 分支**只允许增加/修改根目录的 `README.md` 和 `do
 文档与经验遵循同样的分流原则。fork 专属产品定制（架构说明、产品设计、fork 专属素材）留在
 fork，放在 `docs/assets/` 下，不提交回上游。通用、上游也受益的文档或经验改进——持续的硬件事实、
 可复用的接口、能帮助任何 AI Passport 用户的构建或发布流程改进——作为 PR 提交回上游。
-`plays/` 应用档案与发布后的经验沉淀属于上游，作为 PR 提案回上游。发布后的工作请用
+相对仓库根目录的 `docs/reference/<username>/<app-name>/` 应用档案与
+`docs/reference/<username>/` 发布后经验条目属于上游，作为 PR 提案回上游。发布后的工作请用
 `experience-pr` 与 `plays-archive` skill，见 `docs/development/release/project-completion.md`。

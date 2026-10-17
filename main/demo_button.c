@@ -2,6 +2,7 @@
 // 电压显示是本页的核心:换了分压/上拉阻值的开发者靠它重标 BSP_BTN_MV_TABLE。
 #include "demo.h"
 #include "bsp_button.h"
+#include "bsp_display.h"
 #include "ui_pixel.h"
 #include "lvgl.h"
 #include <stdio.h>
@@ -15,7 +16,7 @@ static char s_lines[LOG_LINES][32];
 static int  s_line_cnt;
 
 static const char *BTN_NAME[] = { "UP", "DOWN", "OK" };
-static const char *EV_NAME[]  = { "PRESS", "CLICK", "DOUBLE", "LONG" };
+static const char *EV_NAME[]  = { "PRESS", "CLICK", "DOUBLE", "LONG", "RELEASE" };
 
 // 每 100ms 刷新一次电压。lv_timer 跑在 LVGL 任务里,已持有锁,可直接操作对象。
 static void tick(lv_timer_t *t) {
@@ -69,7 +70,11 @@ void demo_button_exit(void) {
 }
 
 void demo_button_key(bsp_btn_t btn, bsp_btn_ev_t ev) {
+    if ((unsigned)btn >= sizeof(BTN_NAME) / sizeof(BTN_NAME[0]) ||
+        (unsigned)ev >= sizeof(EV_NAME) / sizeof(EV_NAME[0])) return;
     char line[32];
     snprintf(line, sizeof(line), "%s: %s", BTN_NAME[btn], EV_NAME[ev]);
+    if (!bsp_lvgl_lock(250)) return;
     log_push(line);
+    bsp_lvgl_unlock();
 }

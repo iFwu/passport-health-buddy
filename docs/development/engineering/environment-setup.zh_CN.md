@@ -37,12 +37,31 @@ git status --short --branch
 
 | 下载内容 | 国际默认线路 | 中国大陆官方线路 |
 | --- | --- | --- |
-| ESP-IDF 源码 | GitHub `espressif/esp-idf` | 乐鑫 Gitee 镜像及 `esp-gitee-tools` |
+| ESP-IDF 源码 | GitHub `espressif/esp-idf` | 乐鑫 Git 服务镜像（`git.espressif.com.cn`），或 Gitee 镜像及 `esp-gitee-tools` |
 | 编译器和工具归档 | GitHub Release Assets | `dl.espressif.cn/github_assets` |
 | Managed Components | ESP Component Registry 默认存储 | `components-file.espressif.cn` |
 | 当前项目仓库 | 用户提供的 URL | 用户提供的同仓库镜像 |
 
 不得为当前项目编造镜像地址。用户提供的仓库 URL 不可访问时，应询问已授权的镜像或归档地址。
+
+乐鑫 Git 服务镜像收录了完整 `esp-idf` 历史以及 v5.5.3 的全部子模块仓库
+（`espressif/esp32-wifi-lib`、`espressif/esp-lwip`、`ThrowTheSwitch/CMock` 等）。
+由于 v5.5.3 的 `.gitmodules` 条目全部是相对 URL，从该镜像克隆父仓库后，每个
+子模块会自动解析到同一镜像，无需单独的镜像改写步骤。从镜像克隆得到的
+checkout 与 GitHub 克隆完全一致：请核对 tag commit 与
+`https://github.com/espressif/esp-idf/releases/tag/v5.5.3` 相同（当前为
+`b31fcc7a314a44ad992b58f589f7d1d8a4fadff6`）。
+
+旧版镜像安装脚本有时会在全局 Git 配置中写入按仓库的 `insteadOf` 重定向
+（`jihulab.com/esp-mirror/...`，或
+`git config --global url."https://jihulab.com/esp-mirror/".insteadOf` 总开关）。
+按仓库的条目比任何总开关更具体，会把子模块静默重定向到返回 404 或超时的
+源。当子模块拉取因此失败时，先检查并在用户授权下清理残留，而不是盲目重试：
+
+```bash
+git config --global --get-regexp 'url\..*jihulab'
+# 清理需要用户授权：逐条 unset；只删总开关会留下仍会劫持子模块的按仓库条目。
+```
 
 ## 安装主机依赖
 
@@ -116,7 +135,26 @@ git -C "${AI_PASSPORT_IDF_ROOT}" submodule update --init --recursive
 
 ### 中国大陆线路
 
-以下线路使用乐鑫运营的仓库和下载端点，不修改全局 Git 或 pip 配置：
+以下线路使用乐鑫运营的仓库和下载端点，不修改全局 Git 或 pip 配置。
+
+**乐鑫 Git 服务镜像（首选）。** 直接克隆镜像 URL —— `origin` 就是镜像地址，
+`esp-idf` 内部的相对子模块 URL（`../../espressif/...`）会全部解析到同一镜像，
+既不需要改写规则，也不需要全局 Git 配置：
+
+```bash
+mkdir -p "$(dirname "${AI_PASSPORT_IDF_ROOT}")"
+git clone --branch v5.5.3 --recursive \
+    https://git.espressif.com.cn/espressif/esp-idf.git \
+    "${AI_PASSPORT_IDF_ROOT}"
+IDF_GITHUB_ASSETS=dl.espressif.cn/github_assets \
+    "${AI_PASSPORT_IDF_ROOT}/install.sh" esp32c3
+```
+
+镜像发布了与 GitHub 相同的 v5.5.3 tag commit
+（`b31fcc7a314a44ad992b58f589f7d1d8a4fadff6`），并且托管了各子模块仓库本身，
+因此得到的 checkout 与 GitHub 克隆完全一致。
+
+**Gitee 镜像及 esp-gitee-tools（备选）。**
 
 ```bash
 export AI_PASSPORT_GITEE_TOOLS_ROOT="${AI_PASSPORT_GITEE_TOOLS_ROOT:-${HOME}/esp/esp-gitee-tools}"
@@ -134,6 +172,88 @@ IDF_GITHUB_ASSETS=dl.espressif.cn/github_assets \
 
 Gitee 辅助工具报告下载中断时，对同一个 checkout 重新执行子模块命令。不得混用不同 ESP-IDF 版本的部分子模块。
 
+### 子模块拉取与长等待
+
+`esp-idf` v5.5.3 内含 20 余个子模块，其中
+（`components/esp_wifi/lib`、`components/esp_phy/lib`、
+`components/bt/controller/lib_esp32c3_family`）是大体积预编译库。
+`git submodule update --init --recursive` 可能长时间没有输出，agent 的 shell
+也常按固定等待时间把它杀掉（例如 300000 ms 或 "exceeding timeout"），而此时
+进程还在继续拉取。先检查真实状态，不要贸然认定镜像失败：
+
+- 只要 shell 还没报告退出码且 `git status` 仍然不干净，子模块拉取就不算失败。
+  用更长的 shell 等待时间重试，或后台执行直到真正退出。
+- `git submodule update` 被中断后，`components/` 下会出现 `modified:` 条目
+  （例如 `components/esp_wifi/lib`）。这是部分 checkout，不是损坏状态。
+
+原地修复，而不是重新克隆：
+
+```bash
+git -C "${AI_PASSPORT_IDF_ROOT}" submodule update --init --recursive
+# 若 status 仍列出子模块路径，按路径逐个更新：
+git -C "${AI_PASSPORT_IDF_ROOT}" submodule update --init components/<status-中的路径>
+git -C "${AI_PASSPORT_IDF_ROOT}" status --short
+```
+
+运行 `install.sh` 前保持 checkout 干净；各版本 `idf.py` 对未初始化子模块的
+处理不同，部分更新的目录树会产生难以定位的编译错误。
+
+### 大仓子模块修复
+
+`components/esp_wifi/lib` 对应 `espressif/esp32-wifi-lib`，是体积很大的
+预编译仓库，全量拉取通常超过任何合理等待上限。不要在短等待下反复重试全量
+拉取，改为只取钉死的那个 commit：
+
+1. 读取 `esp-idf` 为该路径钉死的 commit：
+
+```bash
+git -C "${AI_PASSPORT_IDF_ROOT}" ls-tree HEAD components/esp_wifi/lib
+# 160000 commit <sha>  components/esp_wifi/lib
+```
+
+2. 删除部分目录，按该 commit 浅取：
+
+```bash
+git -C "${AI_PASSPORT_IDF_ROOT}" rm -rf components/esp_wifi/lib
+mkdir -p "${AI_PASSPORT_IDF_ROOT}/components/esp_wifi/lib"
+cd "${AI_PASSPORT_IDF_ROOT}/components/esp_wifi/lib"
+git init
+git remote add origin https://github.com/espressif/esp32-wifi-lib.git
+git fetch --depth 1 origin <ls-tree-输出的-sha>
+git checkout FETCH_HEAD
+```
+
+3. 让 `git submodule update --init` 登记该 checkout，再核验：
+
+```bash
+git -C "${AI_PASSPORT_IDF_ROOT}" submodule update --init components/esp_wifi/lib
+git -C "${AI_PASSPORT_IDF_ROOT}" status --short
+```
+
+对这些钉死路径不要使用 `git submodule update --depth=1 <path>`：它只浅拉
+默认分支 tip，当钉死的 commit 不是 tip 时会报
+`Unable to find current revision in submodule path`。普通修复后仍然 dirty 的
+路径，先执行 `git submodule deinit -f <path>` 再 `update --init`。路径一律取
+本次 `git status` 打印的实际值，不要照抄示例路径。
+
+### 离线压缩包兜底
+
+重复尝试后所有源都不可达时，乐鑫官方 release 归档是一次完整 checkout 快照
+——已包含 `.git` 与 v5.5.3 的全部子模块——下载后解压即用，不需要任何网络或
+Git 操作：
+
+```bash
+curl -fL -o /tmp/esp-idf-v5.5.3.zip \
+    https://dl.espressif.com/github_assets/espressif/esp-idf/releases/download/v5.5.3/esp-idf-v5.5.3.zip
+mkdir -p "$(dirname "${AI_PASSPORT_IDF_ROOT}")"
+unzip -q /tmp/esp-idf-v5.5.3.zip -d "$(dirname "${AI_PASSPORT_IDF_ROOT}")"
+"${AI_PASSPORT_IDF_ROOT}/install.sh" esp32c3
+```
+
+归档解压后为 `esp-idf-v5.5.3/` 目录（约 1.8 GB）。若 `dl.espressif.com` 较慢，
+可使用 `dl.espressif.cn` 主机变体，两者提供同一文件。复用该目录作为安装基础
+前，用归档旁发布的校验和验证解压结果。
+
 ## 激活并核验 ESP-IDF
 
 激活只影响当前 shell，是个人化 alias 的通用替代方案：
@@ -146,6 +266,52 @@ printf 'IDF_PATH=%s\n' "${IDF_PATH}"
 ```
 
 版本不是严格的 `ESP-IDF v5.5.3` 时必须停止，不得用其他版本生成项目配置。
+
+激活只对当前 shell 生效：运行 `export.sh` 必须用带点的形式（或 `source`），
+不能写成 `./export.sh`——那会在子 shell 中执行，当前 shell 不会配置成功
+（之后报 `IDF_PATH is not set` 或 `idf.py: command not found`）。安装时使用过
+自定义 `IDF_TOOLS_PATH` 的，每次 `export.sh` 前都要重新设置——脚本不会记住
+上一个 session 的值。
+
+### 工具链安装失败
+
+工具链下载出现校验和不匹配或归档损坏时，先从选定的 ESP-IDF 5.5.3 checkout
+重新运行安装器，保持相同的 `IDF_TOOLS_PATH` 和下载路线设置。例如在
+Linux/macOS 上：
+
+```bash
+"${AI_PASSPORT_IDF_ROOT}/install.sh" esp32c3
+```
+
+使用中国大陆路线时，按[选择下载路线](#选择下载路线)中的示例，把
+`IDF_GITHUB_ASSETS` 应用于这次调用。
+[ESP-IDF 5.5.3 安装器](https://github.com/espressif/esp-idf/blob/v5.5.3/tools/idf_tools.py)
+会校验已有归档并替换失败的归档，而不是清空全部下载缓存。
+
+下载缓存位于实际 `IDF_TOOLS_PATH` 下的 `dist` 目录。未覆盖路径时，通常为
+Linux/macOS 的 `~/.espressif/dist` 或 Windows 的
+`%USERPROFILE%\.espressif\dist`。不要清空整个目录，其中可能含其他 ESP-IDF
+版本共用的有效离线归档。若仍需手动处理，先根据日志和实际工具路径确认
+具体失败的归档，取得批准后仅把该文件移到可恢复的位置，再重试。
+Windows 上重试官方安装器，或在 ESP-IDF Command Prompt 中进入选定 checkout
+后重新运行 `install.bat esp32c3`；在该终端中保留相同的自定义工具路径和下载
+路线设置。
+
+macOS 上的 `[SSL: CERTIFICATE_VERIFY_FAILED]` 只表示证书校验失败，并不能
+确定唯一修复方式。先确认安装器实际使用的 Python 解释器及其安装来源，
+再检查该解释器的信任证书和已批准使用的代理。
+[`Install Certificates.command` 辅助脚本](https://docs.python.org/3.13/using/mac.html#installation-steps)
+属于 python.org 的 macOS 安装器流程，只对提供该脚本的对应 Python 安装使用。
+Homebrew 等其他 Python 发行方式不一定提供它，应按其证书配置流程处理。
+更改信任证书前需取得批准，禁止通过关闭 TLS 校验绕过错误。
+
+Apple Silicon 上的 `tool riscv32-esp-elf has no installed versions` 可能只是
+工具未安装或工具路径错误，不能据此判断架构不匹配。先核对 `IDF_TOOLS_PATH`
+并重新运行 ESP32-C3 安装器。若出现 `bad CPU type in executable`，再检查
+主机、当前 shell／Python 和失败二进制的架构。ESP-IDF 5.5.3 提供
+[原生 macOS ARM64 ESP32-C3 工具链](https://github.com/espressif/esp-idf/blob/v5.5.3/tools/tools.json)，
+应优先使用。只有确认必须使用仅支持 x86-64 的可执行程序后，才考虑 Rosetta，
+且安装前必须取得批准；它不是 ESP32-C3 的常规前置条件。
 
 中国大陆环境可在当前终端临时加速 Managed Component 归档下载：
 
@@ -257,6 +423,8 @@ idf.py -p <port> monitor
 | 找不到 `idf.py` | 激活所选安装的 `export.sh`，不得猜测个人 alias。 |
 | ESP-IDF 版本错误 | 停止并并行激活/安装 v5.5.3。 |
 | GitHub 源码或工具下载慢 | 切换到本文的乐鑫中国大陆线路。 |
+| 子模块拉取超时或 shell 报告等待超限 | 先确认 `git status`；若仍在拉取，用更长等待时间或后台重试，再用 `git submodule update --init --recursive` 修复。 |
+| 子模块拉取 404 或反复回到过期镜像 | 检查 `git config --global --get-regexp 'url\..*jihulab'`；清理残留前先获得用户授权。 |
 | 中国大陆组件下载慢 | 在当前终端设置 `IDF_COMPONENT_STORAGE_URL`。 |
 | 组件下载失败 | 检查网络、代理、DNS 和证书，不得通过关闭 TLS 校验绕过。 |
 | 配置缺少已跟踪 defaults | 保留有意配置，再执行 `idf.py set-target esp32c3`。 |

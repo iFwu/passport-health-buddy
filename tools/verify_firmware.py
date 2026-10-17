@@ -4,28 +4,23 @@
 from __future__ import annotations
 
 import hashlib
+import shlex
 import struct
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 
 
-EXPECTED_IMAGES = (
-    (0x0000, "bootloader/bootloader.bin"),
-    (0x8000, "partition_table/partition-table.bin"),
-    (0x10000, "FoloToy-AI-Passport.bin"),
+REQUIRED_IMAGES = (
+    "bootloader/bootloader.bin",
+    "partition_table/partition-table.bin",
+    "FoloToy-AI-Passport.bin",
 )
 
 FLASH_SIZE = 8 * 1024 * 1024
-PARTITION_TABLE_OFFSET = 0x8000
 PARTITION_TABLE_SIZE = 0xC00
-APP_MAX_SIZE = 0x300000
-CARDID_OFFSET = 0x356000
-CARDID_SIZE = 0x4000
-RECOVERY_OFFSET = 0x700000
-RECOVERY_SIZE = 0x100000
+PARTITION_TABLE_SECTOR_SIZE = 0x1000
 ENTRY = struct.Struct("<HBBII16sI")
-RECOVERY_BOOT_MARKER = b"UP held: booting permanent recovery"
 
 
 @dataclass(frozen=True)
@@ -41,7 +36,9 @@ class Partition:
         return self.offset + self.size
 
 
-def parse_partition_table(raw: bytes) -> tuple[list[Partition], bool]:
+def parse_partition_table(
+    raw: bytes, minimum_partition_offset: int = 0x9000
+) -> tuple[list[Partition], bool]:
     """Parse an ESP-IDF table and verify its optional MD5 marker."""
     if len(raw) < PARTITION_TABLE_SIZE:
         raise ValueError("partition table is truncated")
@@ -64,7 +61,12 @@ def parse_partition_table(raw: bytes) -> tuple[list[Partition], bool]:
 
         _, kind, subtype, offset, size, label_raw, _ = ENTRY.unpack_from(raw, cursor)
         label = label_raw.split(b"\0", 1)[0].decode("ascii", "strict")
-        if not label or not size or offset < 0x9000 or offset + size > FLASH_SIZE:
+        if (
+            not label
+            or not size
+            or offset < minimum_partition_offset
+            or offset + size > FLASH_SIZE
+        ):
             raise ValueError(f"invalid partition bounds for {label!r}")
         partitions.append(Partition(kind, subtype, offset, size, label))
 
@@ -73,58 +75,115 @@ def parse_partition_table(raw: bytes) -> tuple[list[Partition], bool]:
     return partitions, found_md5
 
 
-def verify_recovery_contract(merged: bytes, build_dir: Path) -> None:
-    """Enforce the artifact/layout contract used by mini-program BLE install."""
+def parse_flash_args(raw: str) -> dict[str, int]:
+    """Return image paths and offsets from ESP-IDF's line-oriented flash_args."""
+    images: dict[str, int] = {}
+    for line in raw.splitlines():
+        fields = shlex.split(line)
+        if not fields:
+            continue
+        try:
+            offset = int(fields[0], 0)
+        except ValueError as error:
+            if fields[0].startswith("--"):
+                continue
+            raise ValueError(f"invalid image offset in flash_args: {fields[0]}") from error
+        if len(fields) != 2:
+            raise ValueError(f"invalid image entry in flash_args: {line}")
+        if fields[1] in images:
+            raise ValueError(f"duplicate image in flash_args: {fields[1]}")
+        images[fields[1]] = offset
+    return images
+
+
+def verify_flash_images(
+    merged: bytes, build_dir: Path, image_offsets: dict[str, int]
+) -> dict[str, int]:
+    """Verify every configured image, not just the minimum bootable set."""
+    image_sizes: dict[str, int] = {}
+    for name, offset in image_offsets.items():
+        image_path = build_dir / name
+        if not image_path.is_file():
+            raise ValueError(f"missing image {image_path}")
+        size = image_path.stat().st_size
+        if not size:
+            raise ValueError(f"image {name} is empty")
+        if offset < 0 or offset + size > FLASH_SIZE:
+            raise ValueError(f"image {name} is outside the 8 MB flash bounds")
+        image_sizes[name] = size
+
+    ordered = sorted(image_offsets, key=image_offsets.__getitem__)
+    for left, right in zip(ordered, ordered[1:]):
+        if image_offsets[left] + image_sizes[left] > image_offsets[right]:
+            raise ValueError(f"images {left!r} and {right!r} overlap")
+
+    for name, offset in image_offsets.items():
+        image = (build_dir / name).read_bytes()
+        if merged[offset : offset + len(image)] != image:
+            raise ValueError(f"{name} differs at merged offset 0x{offset:x}")
+        print(f"Verified {name}: {len(image)} bytes at 0x{offset:x}")
+    return image_sizes
+
+
+def verify_firmware_layout(
+    merged: bytes, build_dir: Path, partition_table_offset: int, app_offset: int
+) -> list[Partition]:
+    """Validate the configured partition table and its application image."""
     table = merged[
-        PARTITION_TABLE_OFFSET : PARTITION_TABLE_OFFSET + PARTITION_TABLE_SIZE
+        partition_table_offset : partition_table_offset + PARTITION_TABLE_SIZE
     ]
-    partitions, found_md5 = parse_partition_table(table)
+    partitions, found_md5 = parse_partition_table(
+        table, partition_table_offset + PARTITION_TABLE_SECTOR_SIZE
+    )
     if not found_md5:
         raise ValueError("partition table has no MD5 marker")
 
-    by_label = {item.label: item for item in partitions}
-    expected = {
-        "factory": Partition(0, 0, 0x10000, APP_MAX_SIZE, "factory"),
-        "cardid": Partition(1, 2, CARDID_OFFSET, CARDID_SIZE, "cardid"),
-        "recovery": Partition(0, 0x20, RECOVERY_OFFSET, RECOVERY_SIZE, "recovery"),
-    }
-    for label, wanted in expected.items():
-        if by_label.get(label) != wanted:
-            raise ValueError(f"partition {label!r} must remain {wanted}, got {by_label.get(label)}")
+    labels = [item.label for item in partitions]
+    if len(labels) != len(set(labels)):
+        raise ValueError("partition labels must be unique")
 
     ordered = sorted(partitions, key=lambda item: item.offset)
     for left, right in zip(ordered, ordered[1:]):
         if left.end > right.offset:
             raise ValueError(f"partitions {left.label!r} and {right.label!r} overlap")
-    for item in partitions:
-        if item.label != "cardid" and item.offset < CARDID_OFFSET + CARDID_SIZE and CARDID_OFFSET < item.end:
-            raise ValueError(f"partition {item.label!r} overlaps protected cardid")
-        if item.label != "recovery" and item.offset < RECOVERY_OFFSET + RECOVERY_SIZE and RECOVERY_OFFSET < item.end:
-            raise ValueError(f"partition {item.label!r} overlaps permanent Recovery")
 
+    matching_apps = [
+        item for item in partitions if item.kind == 0 and item.offset == app_offset
+    ]
+    if len(matching_apps) != 1:
+        raise ValueError(
+            f"application offset 0x{app_offset:x} must match exactly one app partition"
+        )
+    app_partition = matching_apps[0]
     app_path = build_dir / "FoloToy-AI-Passport.bin"
     app_size = app_path.stat().st_size
-    if app_size > APP_MAX_SIZE:
-        raise ValueError(f"application is {app_size} bytes; BLE limit is {APP_MAX_SIZE}")
-    if len(merged) <= 0x10000 or merged[0x10000] != 0xE9:
-        raise ValueError("merged artifact has no ESP application image at 0x10000")
+    if app_size > app_partition.size:
+        raise ValueError(
+            f"application is {app_size} bytes; partition limit is {app_partition.size}"
+        )
+    if len(merged) <= app_offset or merged[app_offset] != 0xE9:
+        raise ValueError(
+            f"merged artifact has no ESP application image at 0x{app_offset:x}"
+        )
 
-    # A derivative may add resource partitions after cardid. The merged file is
-    # still acceptable only if protected regions contain padding, never a real
-    # device identity or a replacement Recovery payload.
-    for label, offset, size in (
-        ("cardid", CARDID_OFFSET, CARDID_SIZE),
-        ("recovery", RECOVERY_OFFSET, RECOVERY_SIZE),
-    ):
-        payload = merged[offset : min(len(merged), offset + size)]
-        if any(byte != 0xFF for byte in payload):
-            raise ValueError(f"merged artifact contains forbidden {label} payload bytes")
+    print(
+        f"Firmware layout: PASS (app {app_size} / {app_partition.size} bytes "
+        f"in {app_partition.label!r} at 0x{app_offset:x})"
+    )
+    return partitions
 
-    bootloader = (build_dir / "bootloader" / "bootloader.bin").read_bytes()
-    if RECOVERY_BOOT_MARKER not in bootloader:
-        raise ValueError("bootloader is missing the 5-second UP Recovery hook")
 
-    print(f"Mini-program BLE contract: PASS (app {app_size} / {APP_MAX_SIZE} bytes)")
+def verify_extra_image_partitions(
+    image_offsets: dict[str, int], image_sizes: dict[str, int],
+    partitions: list[Partition],
+) -> None:
+    """Allow custom images anywhere within one partition, never across its end."""
+    for name, offset in image_offsets.items():
+        if name in REQUIRED_IMAGES:
+            continue
+        end = offset + image_sizes[name]
+        if not any(part.offset <= offset and end <= part.end for part in partitions):
+            raise ValueError(f"image {name} must fit entirely within one partition")
 
 
 def main() -> int:
@@ -136,29 +195,27 @@ def main() -> int:
         print("ERROR: merged firmware or flash_args is missing", file=sys.stderr)
         return 1
 
-    flash_args = flash_args_path.read_text(encoding="utf-8")
-    if "--flash_size 8MB" not in flash_args:
-        print("ERROR: flash_args does not select the required 8 MB flash size", file=sys.stderr)
-        return 1
-
-    merged = merged_path.read_bytes()
-    for offset, relative_name in EXPECTED_IMAGES:
-        image_path = build_dir / relative_name
-        if not image_path.is_file():
-            print(f"ERROR: missing image {image_path}", file=sys.stderr)
-            return 1
-        image = image_path.read_bytes()
-        if merged[offset : offset + len(image)] != image:
-            print(f"ERROR: {relative_name} differs at merged offset 0x{offset:x}", file=sys.stderr)
-            return 1
-        print(f"Verified {relative_name}: {len(image)} bytes at 0x{offset:x}")
-
-    if len(merged) > FLASH_SIZE:
-        print("ERROR: merged firmware exceeds 8 MB", file=sys.stderr)
-        return 1
-
     try:
-        verify_recovery_contract(merged, build_dir)
+        flash_args = flash_args_path.read_text(encoding="utf-8")
+        if "--flash_size 8MB" not in flash_args:
+            raise ValueError("flash_args does not select the required 8 MB flash size")
+        image_offsets = parse_flash_args(flash_args)
+        missing = [name for name in REQUIRED_IMAGES if name not in image_offsets]
+        if missing:
+            raise ValueError(f"flash_args is missing required images: {missing}")
+        if image_offsets["bootloader/bootloader.bin"] != 0:
+            raise ValueError("the merged bootloader must start at 0x0")
+        if merged_path.stat().st_size > FLASH_SIZE:
+            raise ValueError("merged firmware exceeds 8 MB")
+        merged = merged_path.read_bytes()
+        image_sizes = verify_flash_images(merged, build_dir, image_offsets)
+        partitions = verify_firmware_layout(
+            merged,
+            build_dir,
+            image_offsets["partition_table/partition-table.bin"],
+            image_offsets["FoloToy-AI-Passport.bin"],
+        )
+        verify_extra_image_partitions(image_offsets, image_sizes, partitions)
     except (OSError, UnicodeDecodeError, ValueError) as error:
         print(f"ERROR: {error}", file=sys.stderr)
         return 1
