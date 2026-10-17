@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>AI Passport 固件术语速查</title><link rel="stylesheet" href="../assets/course.css"></head><body><main>
+<nav><a href="../lessons/0001-firmware-and-records.html">返回第一课</a><a href="../../plank-trainer.md">使用手册</a></nav>
+<header><p class="eyebrow">AI Passport · 参考</p><h1>固件术语速查</h1><p>这是首次介绍用的参考表，不是已掌握知识清单。</p></header>
+<table><thead><tr><th scope="col">术语</th><th scope="col">在本项目中的含义</th></tr></thead><tbody>
+<tr><th scope="row">源码</th><td>人可以修改的 C 程序及配置，描述计时、界面和保存行为。</td></tr>
+<tr><th scope="row">ESP-IDF</th><td>Espressif 的开发框架和工具链，用来构建 ESP32-C3 应用。</td></tr>
+<tr><th scope="row">编译 / Build</th><td>把源码和依赖转换成芯片能执行的程序及相关产物；不会自行改变设备。</td></tr>
+<tr><th scope="row">固件 / .bin</th><td>供设备运行的二进制程序或安装镜像；app-only 与 merged image 用途不同。</td></tr>
+<tr><th scope="row">烧录</th><td>将程序写入设备 Flash 的操作，需要选对目标和地址。</td></tr>
+<tr><th scope="row">RAM</th><td>运行时临时内存，掉电后正在计时的状态与所有尚未保存的记录丢失。</td></tr>
+<tr><th scope="row">Flash</th><td>断电后仍能保留程序和数据的存储器，分区用于分开不同内容。</td></tr>
+<tr><th scope="row">NVS / commit</th><td>Flash 中的键值存储 / 提交改动。本应用只有提交成功才把结果作为已保存记录。</td></tr>
+<tr><th scope="row">bootloader</th><td>启动应用之前运行的引导程序；按分区信息选择要加载的应用。</td></tr>
+<tr><th scope="row">Recovery</th><td>设备预置的独立恢复程序，用于重新安装兼容应用，不是普通计时历史。</td></tr>
+<tr><th scope="row">BSP</th><td>仓库已有的板级驱动接口，包括显示、按键与音频；计时应用复用它们。</td></tr>
+</tbody></table><footer>来源：<a href="../RESOURCES.md">资料记录</a>。本页可直接打印。</footer>
+</main></body></html>

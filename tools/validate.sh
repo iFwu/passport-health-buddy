@@ -28,7 +28,17 @@ run_static_checks() {
         tests/test_ui_pixel_math.c main/ui_pixel_math.c \
         -o "${test_dir}/test_ui_pixel_math"
     "${test_dir}/test_ui_pixel_math"
-    python3 tests/test_verify_firmware.py
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \
+        tests/test_plank_core.c main/plank_core.c -o "${test_dir}/test_plank_core"
+    "${test_dir}/test_plank_core"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \
+        tests/test_plank_audio.c main/plank_audio.c main/plank_core.c -o "${test_dir}/test_plank_audio"
+    "${test_dir}/test_plank_audio"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain -Itests/stubs \
+        tests/test_plank_storage.c main/plank_storage.c main/plank_core.c \
+        -o "${test_dir}/test_plank_storage"
+    "${test_dir}/test_plank_storage"
+    python3 -B tests/test_verify_firmware.py
     rm -rf "${test_dir}"
     echo "Host tests: PASS"
 }
@@ -51,6 +61,10 @@ run_firmware_checks() (
         -o "${validation_build_dir}/FoloToy-AI-Passport-full.bin"
     python3 tools/verify_firmware.py "${validation_build_dir}"
     mkdir -p "${repo_root}/build"
+    mkdir -p "${repo_root}/build/verified"
+    install -m 0644 "${validation_build_dir}/bootloader/bootloader.bin" "${repo_root}/build/verified/bootloader.bin"
+    install -m 0644 "${validation_build_dir}/partition_table/partition-table.bin" "${repo_root}/build/verified/partition-table.bin"
+    install -m 0644 "${validation_build_dir}/FoloToy-AI-Passport.bin" "${repo_root}/build/verified/application.bin"
     install -m 0644 \
         "${validation_build_dir}/FoloToy-AI-Passport-full.bin" \
         "${repo_root}/build/FoloToy-AI-Passport-full.bin"
@@ -62,6 +76,7 @@ case "${mode}" in
     --all)
         run_static_checks
         run_firmware_checks
+        bash tools/test-plank-ui.sh
         ;;
     --static)
         run_static_checks

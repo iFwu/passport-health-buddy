@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PLANK 预览</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f3f5f7;color:#1c252a;font-family:system-ui,sans-serif}main{max-width:1040px;margin:auto;padding:24px}h1{font-size:24px;margin:0 0 20px}h2{font-size:17px;margin:28px 0 12px}.screens{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}figure{margin:0}figure img{width:240px;height:320px;display:block;image-rendering:pixelated}figcaption{font-size:14px;padding:8px 0}.audio{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px}audio{width:100%}label{display:block;font-size:14px;margin-bottom:6px}
+</style>
+<main><h1>PLANK</h1><div class="screens">
+<figure><img src="running-under-minute.png" alt="59.99 秒"><figcaption>59.99 秒</figcaption></figure>
+<figure><img src="running-over-minute.png" alt="1 分钟"><figcaption>1 分钟</figcaption></figure>
+<figure><img src="running-narrow-digits.png" alt="11.11 秒"><figcaption>11.11 秒</figcaption></figure>
+<figure><img src="running-seven.png" alt="17.07 秒"><figcaption>17.07 秒</figcaption></figure>
+<figure><img src="preparing.png" alt="准备"><figcaption>准备</figcaption></figure>
+<figure><img src="starting.png" alt="开始信号"><figcaption>0：开始信号</figcaption></figure>
+<figure><img src="ready.png" alt="等待开始"><figcaption>等待开始</figcaption></figure>
+<figure><img src="history.png" alt="最近记录"><figcaption>最近记录</figcaption></figure>
+</div><h2>提示音</h2><div class="audio">
+<div><label for="prep">准备与开始</label><audio id="prep" controls preload="none" src="preparation.wav"></audio></div>
+<div><label for="ten">10 秒</label><audio id="ten" controls preload="none" src="ten.wav"></audio></div>
+<div><label for="thirty">30 秒</label><audio id="thirty" controls preload="none" src="thirty.wav"></audio></div>
+<div><label for="minute">整分钟</label><audio id="minute" controls preload="none" src="minute.wav"></audio></div>
+<div><label for="stop">结束</label><audio id="stop" controls preload="none" src="stop.wav"></audio></div>
+</div></main>
+</html>

@@ -111,6 +111,9 @@ LICENSE                  仓库许可证
 
 ## 文档索引
 
+- [平板支撑自由计时器](plank-trainer.md)：专用应用使用手册、记录语义与安装边界。
+- [固件入门中文小课](learning/README.md)：三分钟课程、即时反馈练习与术语参考。
+
 本仓库文档按功能域组织。`authoritative` 指对开发与协作有约束力的文档；`参考` 指提供背景或索引的文档。
 
 - [`docs/development/`](development/README.zh_CN.md) — 工程规则与可复用工作流：`ai-guide.md`、`engineering/`、`ci/`、`release/` 区。其 README 列明它们。

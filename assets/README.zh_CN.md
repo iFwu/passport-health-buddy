@@ -8,12 +8,16 @@
 
 ## 字库（fonts）
 
+平板支撑界面使用 `fonts/plank_zh_16.c`，由 Adobe 思源黑体 `SourceHanSansCN-Normal.otf` 按界面文字生成，16 px、4 bpp，附 `SourceHanSans-LICENSE.txt`（SIL OFL 1.1）。原字体来自 Adobe 官方 `adobe-fonts/source-han-sans` 的 `release/SubsetOTF/CN/`。运行 `node tools/generate-plank-font.mjs`（固定 `lv_font_conv@1.5.3`）可重新生成，字库同时用于固件和桌面布局测试。
+
 可复用的字库文件与生成的字库源码放在 `fonts/`。
 
 - 命名要能反映字族、字重、字级与格式。
 - 记录来源、许可、字符范围、转换命令与目标放置路径。
 - 添加字库前评估 Flash 与内部 RAM 影响；ESP32-C3 无 PSRAM。
 - 不提交许可不允许分发的字库。
+
+主计时数字由 `main/plank_digits.c` 使用 LVGL 图元绘制，无需数字字体资源。秒、两位小数和分钟分别使用 64 / 32 / 28 px 高度，段条端部斜切、笔画加粗，只绘制点亮段。数位尺寸固定，固件与 host LVGL 预览共用绘制实现。中文界面仍使用上述思源黑体子集，历史文本使用 LVGL 内置 Montserrat。
 
 ## 图片（images）
 

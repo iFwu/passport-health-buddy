@@ -106,6 +106,12 @@ def check_document_languages(files: list[Path], errors: list[str]) -> None:
     markdown = {path.resolve() for path in files if path.suffix.lower() == ".md"}
 
     for path in sorted(markdown):
+        relative = path.relative_to(ROOT)
+        # This fork's trainer manual and teaching workspace are Chinese-only.
+        if relative == Path("docs/plank-trainer.md") or relative.is_relative_to("docs/learning"):
+            if not CJK_RE.search(path.read_text(encoding="utf-8")):
+                errors.append(f"{relative}: trainer documentation must include Chinese prose")
+            continue
         name = path.name
         text = path.read_text(encoding="utf-8")
         opening = "\n".join(text.splitlines()[:8])
