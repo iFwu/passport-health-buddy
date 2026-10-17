@@ -6,6 +6,28 @@
 
 AI Passport stays on all day, clipped on or sitting on the desk. At work it handles sitting and hydration reminders; at the gym it logs sets and rest; at home it leads workouts. Hold a button and speak: a StepFun Step realtime voice model understands, answers, and changes device state directly.
 
+## Innovations
+
+- The model drives hardware: the Step realtime voice model does more than chat; tool calls change device state (water count, rest countdown, training records), stored in Flash after on-screen confirmation.
+- One-sentence gym logging: say "bench press 60 kg, 8 reps" with equipment in hand to create a structured record, no phone spreadsheet.
+- Device/cloud split: the ESP32-C3 handles audio I/O, state machines, and storage; understanding and dialogue go to the Step model; the API key stays on the relay. Timers and manual logs keep working offline.
+- Push-to-talk instead of a wake word, fitting a chip without PSRAM and a 500 mAh battery.
+- One device covers office, gym, and home, on all day.
+
+## Step model usage
+
+| Model | Use | Interface |
+| --- | --- | --- |
+| `stepaudio-2.5-realtime` | Speech understanding, voice replies, tool calls that drive device actions | Realtime API, `wss://api.stepfun.com/v1/realtime` |
+| `step-5-preview` | Daily and weekly reports from the day's records | Chat Completions |
+
+## Technical design
+
+- Firmware: ESP-IDF 5.5.3 with FreeRTOS tasks; LVGL draws the 240 × 320 UI; records are a versioned blob in NVS.
+- State machines: one per mode (everyday, gym, home); timer, reminder, and record logic is independent of ESP-IDF and LVGL and covered by host tests.
+- Audio: a dedicated task plays cues and model replies so keys and timers never wait on audio; recording streams 16 kHz PCM.
+- Voice path: the device reaches the relay over Wi-Fi; the relay talks to the Step Realtime API and turns tool calls into device commands, as below.
+
 ## A day with the device
 
 ```mermaid
