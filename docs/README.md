@@ -200,6 +200,7 @@ LICENSE                  Repository license
 
 ## Documentation index
 
+- [Wearable health companion](health-companion.md): target product shape, Step realtime voice design, and roadmap.
 - [Plank free timer](plank-trainer.md): Chinese manual for the dedicated timer, its records, and install boundaries.
 - [Firmware introduction](learning/README.md): Chinese lesson, practice, and term reference.
 
