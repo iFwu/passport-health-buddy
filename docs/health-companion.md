@@ -186,7 +186,7 @@ sequenceDiagram
 
 ## 6. Technical Architecture & Engineering Optimization
 
-### Why this is difficult on a small chip
+### Engineering challenges and key trade-offs
 
 This is not just a few screens connected to a model API. With no PSRAM, the ESP32-C3 shares roughly 400 KB of internal SRAM among the system, Wi-Fi, TLS, audio, task stacks and LVGL. Its 8 MB Flash stores code and fonts, but cannot replace working RAM. The model runs in the cloud; the chip handles realtime capture, networking, streamed playback, display and reliable execution.
 
