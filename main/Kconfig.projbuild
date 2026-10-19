@@ -1,0 +1,29 @@
+menu "Health Buddy"
+
+    config HEALTH_UART_PROVISION
+        bool "Accept Wi-Fi and the API key from the serial console"
+        default n
+        help
+            Emulator-only. The device firmware keeps this off and uses the
+            hotspot provisioning page instead.
+
+    config HEALTH_WIFI_SSID
+        string "Built-in Wi-Fi SSID"
+        default ""
+        help
+            From the untracked sdkconfig.local. When this and the API key are
+            set, the device connects at boot and does not open the portal.
+
+    config HEALTH_WIFI_PASSWORD
+        string "Built-in Wi-Fi password"
+        default ""
+
+    config HEALTH_STEPFUN_API_KEY
+        string "Built-in StepFun API key"
+        default ""
+
+    config HEALTH_STEPFUN_MODEL
+        string "StepFun realtime model"
+        default "stepaudio-3-realtime-preview"
+
+endmenu

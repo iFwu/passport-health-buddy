@@ -29,6 +29,10 @@ run_static_checks() {
         -o "${test_dir}/test_ui_pixel_math"
     "${test_dir}/test_ui_pixel_math"
     "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \
+        tests/test_health_logic.c main/health_log.c main/step_rx.c main/qjson.c \
+        main/b64_stream.c main/portal_form.c -o "${test_dir}/test_health_logic"
+    "${test_dir}/test_health_logic"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \
         tests/test_plank_core.c main/plank_core.c -o "${test_dir}/test_plank_core"
     "${test_dir}/test_plank_core"
     "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \

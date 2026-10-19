@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>随身健康助手</title>
+<body style="font-family:sans-serif;max-width:28rem;margin:1.5rem">
+<h1>随身健康助手</h1>
+<p>填写 2.4 GHz Wi-Fi 和 StepFun API Key。Key 只存在这台设备里。</p>
+<form id="f">
+<label>Wi-Fi 名称<br><input name="ssid" required maxlength="32" style="width:100%"></label><br><br>
+<label>Wi-Fi 密码（开放网络留空）<br><input name="pass" type="password" maxlength="63" style="width:100%"></label><br><br>
+<label>StepFun API Key<br><input name="key" required maxlength="180" style="width:100%"></label><br><br>
+<button>保存并连接</button>
+</form>
+<p id="m"></p>
+<script>
+document.getElementById("f").onsubmit = async (event) => {
+  event.preventDefault();
+  const body = new URLSearchParams(new FormData(event.target));
+  document.getElementById("m").textContent = "正在连接…";
+  const response = await fetch("/save", {method: "POST", body});
+  const json = await response.json();
+  document.getElementById("m").textContent = json.message;
+  for (let i = 0; i < 30; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    const status = await fetch("/status").then((item) => item.json()).catch(() => null);
+    if (status && status.message) document.getElementById("m").textContent = status.message;
+  }
+};
+</script>
