@@ -76,7 +76,7 @@ static void capture(plank_model_t *model, const char *directory, const char *nam
                     uint64_t now, bool audio_ok, bool buttons_ok)
 {
     plank_ui_refresh(model, now, -1, audio_ok, buttons_ok,
-                      "语音就绪", 0xD9E7EC, 50, false);
+                      "语音就绪", 0xD9E7EC, 50, false, NULL);
     lv_obj_update_layout(lv_screen_active());
     s_label_count = 0;
     s_footer_labels = 0;
@@ -107,7 +107,7 @@ static void check_digit_pixels(void)
     lv_obj_t *screen = lv_obj_create(NULL);
     lv_obj_set_style_bg_color(screen, lv_color_hex(0xFFFFFF), 0);
     lv_screen_load(screen);
-    const unsigned heights[] = {28, 32, 64};
+    const unsigned heights[] = {16, 24, 48};
     const char *lit_segments[] = {
         "abcdef", "bc", "abdeg", "abcdg", "bcfg",
         "acdfg", "acdefg", "abc", "abcdefg", "abcdfg",
@@ -155,7 +155,7 @@ static void check_digit_pixels(void)
         }
         lv_obj_delete(digits.obj);
     }
-    puts("Plank digits: PASS (0-9, three sizes, bevel, no inactive tint, stable bounds)");
+    puts("Plank digits: PASS (0-9, activity-layout sizes, bevel, no inactive tint, stable bounds)");
 }
 
 int main(int argc, char **argv)

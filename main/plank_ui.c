@@ -1,6 +1,7 @@
 #include "plank_ui.h"
 #include "ui_pixel.h"
 #include "plank_digits.h"
+#include "health_motion.h"
 #include <stdio.h>
 #include <inttypes.h>
 LV_FONT_DECLARE(plank_zh_16);
@@ -8,6 +9,7 @@ LV_FONT_DECLARE(plank_zh_16);
 static lv_obj_t *s_time, *s_dot, *s_state, *s_detail, *s_keys_label, *s_battery;
 static lv_obj_t *s_minute_unit, *s_voice_bar, *s_voice, *s_volume_box, *s_volume;
 static lv_obj_t *s_mute;
+static health_motion_t s_motion;
 static plank_digits_t s_seconds, s_fraction, s_minutes, s_countdown;
 
 static lv_obj_t *label(lv_obj_t *parent, int y, const lv_font_t *font)
@@ -76,28 +78,40 @@ void plank_ui_create(void)
     lv_obj_set_width(s_state, 104);
     lv_obj_set_style_text_align(s_state, LV_TEXT_ALIGN_LEFT, 0);
     box(screen, 20, 80, 200, 2, 0xD9E7EC, 0, 0);
-    s_time = label(screen, 142, &lv_font_montserrat_32);
-    plank_digits_create(&s_minutes, screen, 4, 28, false);
-    lv_obj_set_pos(s_minutes.obj, 53, 92);
-    s_minute_unit = label(screen, 102, &lv_font_montserrat_14);
+    lv_obj_t *name = label(screen, 55, &plank_zh_16);
+    lv_obj_set_align(name, LV_ALIGN_TOP_LEFT);
+    lv_obj_set_pos(name, 22, 55);
+    lv_obj_set_width(name, 104);
+    lv_obj_set_style_text_align(name, LV_TEXT_ALIGN_LEFT, 0);
+    lv_label_set_text(name, "平板支撑");
+    lv_obj_set_pos(s_state, 18, 130);
+    lv_obj_set_width(s_state, 204);
+    lv_obj_set_style_text_align(s_state, LV_TEXT_ALIGN_CENTER, 0);
+    health_motion_create(&s_motion, screen, 72, 85);
+    s_time = label(screen, 151, &lv_font_montserrat_32);
+    plank_digits_create(&s_minutes, screen, 4, 16, false);
+    lv_obj_set_pos(s_minutes.obj, 53, 132);
+    s_minute_unit = label(screen, 132, &lv_font_montserrat_14);
     lv_label_set_text(s_minute_unit, "MIN");
     lv_obj_set_align(s_minute_unit, LV_ALIGN_TOP_LEFT);
-    lv_obj_set_pos(s_minute_unit, 122, 102);
+    lv_obj_set_pos(s_minute_unit, 122, 132);
     lv_obj_set_size(s_minute_unit, 31, 18);
-    plank_digits_create(&s_seconds, screen, 2, 64, false);
-    lv_obj_set_pos(s_seconds.obj, 53, 128);
-    plank_digits_create(&s_fraction, screen, 2, 32, true);
-    lv_obj_set_pos(s_fraction.obj, 149, 160);
+    plank_digits_create(&s_seconds, screen, 2, 48, false);
+    lv_obj_set_pos(s_seconds.obj, 53, 151);
+    plank_digits_create(&s_fraction, screen, 2, 24, true);
+    lv_obj_set_pos(s_fraction.obj, 149, 175);
     s_dot = lv_obj_create(screen);
     lv_obj_remove_style_all(s_dot);
-    lv_obj_set_pos(s_dot, 137, 187);
-    lv_obj_set_size(s_dot, 5, 5);
+    lv_obj_set_pos(s_dot, 137, 194);
+    lv_obj_set_size(s_dot, 4, 4);
     lv_obj_set_style_bg_color(s_dot, lv_color_hex(0x162E32), 0);
     lv_obj_set_style_bg_opa(s_dot, LV_OPA_COVER, 0);
     lv_obj_set_style_radius(s_dot, 1, 0);
-    plank_digits_create(&s_countdown, screen, 1, 64, false);
-    lv_obj_set_pos(s_countdown.obj, 102, 128);
-    s_detail = label(screen, 208, &plank_zh_16);
+    plank_digits_create(&s_countdown, screen, 1, 48, false);
+    lv_obj_set_pos(s_countdown.obj, 106, 151);
+    s_detail = label(screen, 202, &plank_zh_16);
+    lv_obj_t *navigation = label(screen, 222, &plank_zh_16);
+    lv_label_set_text(navigation, "1/4 长按上/下切换");
     s_voice_bar = box(screen, 8, 250, 224, 32, 0xD9E7EC, 6, 2);
     s_voice = label(s_voice_bar, 5, &plank_zh_16);
     lv_obj_set_width(s_voice, 212);
@@ -143,18 +157,18 @@ static void show_stopwatch_time(uint64_t duration_ms)
     lv_obj_clear_flag(s_dot, LV_OBJ_FLAG_HIDDEN);
     unsigned secs = (unsigned)(seconds % 60);
     unsigned places = secs >= 10 ? 2 : 1;
-    int x = 120 - (int)(places * 40 - 4 + 58) / 2 - (int)(2 - places) * 40;
+    int x = 120 - (int)(places * 30 - 3 + 44) / 2 - (int)(2 - places) * 30;
     lv_obj_set_x(s_seconds.obj, x);
-    lv_obj_set_x(s_dot, x + 84);
-    lv_obj_set_x(s_fraction.obj, x + 96);
+    lv_obj_set_x(s_dot, x + 63);
+    lv_obj_set_x(s_fraction.obj, x + 72);
     plank_digits_set(&s_seconds, secs);
     plank_digits_set(&s_fraction, (unsigned)(duration_ms % 1000 / 10));
     if (seconds >= 60) {
         unsigned minutes = (unsigned)(seconds / 60);
         unsigned m_places = minutes >= 1000 ? 4 : minutes >= 100 ? 3 : minutes >= 10 ? 2 : 1;
-        int m_width = (int)m_places * 16 - 1;
+        int m_width = (int)m_places * 10 - 1;
         int m_x = 120 - (m_width + 34) / 2;
-        lv_obj_set_x(s_minutes.obj, m_x - (63 - m_width));
+        lv_obj_set_x(s_minutes.obj, m_x - (39 - m_width));
         lv_obj_set_x(s_minute_unit, m_x + m_width + 6);
         lv_obj_clear_flag(s_minutes.obj, LV_OBJ_FLAG_HIDDEN);
         lv_obj_clear_flag(s_minute_unit, LV_OBJ_FLAG_HIDDEN);
@@ -167,7 +181,8 @@ static void show_stopwatch_time(uint64_t duration_ms)
 
 void plank_ui_refresh(const plank_model_t *model, uint64_t now, int battery,
                       bool audio_ok, bool buttons_ok, const char *voice_text,
-                      uint32_t voice_color, unsigned volume, bool volume_visible)
+                      uint32_t voice_color, unsigned volume, bool volume_visible,
+                      const char *running_activity)
 {
     char text[24];
     lv_obj_set_style_bg_color(s_voice_bar, lv_color_hex(voice_color), 0);
@@ -181,6 +196,7 @@ void plank_ui_refresh(const plank_model_t *model, uint64_t now, int battery,
     } else lv_obj_add_flag(s_volume_box, LV_OBJ_FLAG_HIDDEN);
     if (battery < 0) lv_label_set_text(s_battery, "--%");
     else lv_label_set_text_fmt(s_battery, "%d%%", battery);
+    health_motion_show(&s_motion, 0, model->state == PLANK_RUNNING, now);
     const char *state = "自由计时";
     const char *detail = "";
     const char *keys = "确定:开始";
@@ -243,6 +259,14 @@ void plank_ui_refresh(const plank_model_t *model, uint64_t now, int battery,
         model->save == PLANK_SAVE_PENDING) keys = "保存中...";
     if (!audio_ok && model->state == PLANK_READY) state = "声音不可用";
     if (!buttons_ok) { state = "按键不可用"; keys = "重新开机再试"; }
+    if (running_activity) {
+        lv_label_set_text_fmt(s_detail, "%s进行中", running_activity);
+        detail = NULL;
+        keys = "确定:查看进行中训练";
+    }
+    bool minutes_visible = !lv_obj_has_flag(s_minutes.obj, LV_OBJ_FLAG_HIDDEN);
+    if (minutes_visible) lv_obj_add_flag(s_state, LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_clear_flag(s_state, LV_OBJ_FLAG_HIDDEN);
     lv_label_set_text(s_state, state);
     if (detail) lv_label_set_text(s_detail, detail);
     lv_label_set_text(s_keys_label, keys);

@@ -4,7 +4,7 @@
 
 # Passport Health Buddy
 
-An intelligent health companion worn on your chest or placed on your desk. It schedules activity and hydration reminders at work, logs strength sets and runs rest timers at the gym, and supports HIIT intervals and planks at home. Activity reminders follow a time cycle; the device does not detect posture or standing up.
+An intelligent health companion worn on your chest or placed on your desk. It schedules activity and hydration reminders at work, logs strength sets and runs rest timers at the gym, and offers offline plank, squat, jumping-jack and stretch activities at home. Activity reminders follow a time cycle; exercise screens provide timing and illustrations, not posture detection or automatic repetition counting.
 
 Powered by the **StepFun StepAudio 3 Realtime Voice Model**, 8 on-device tools directly drive hardware states. Featuring a pure local state machine with Flash non-volatile memory, it eliminates smartphone dependency on an ultra-compact screen.
 
@@ -14,7 +14,7 @@ Built on the **FoloToy AI Passport** (ESP32-C3, 240 × 320 color display, 3 tact
 
 ## Hardware & On-Screen UI Preview
 
-Every page uses the same card grammar: a header row (page title, mute marker, battery) above a divider, one large reading, at most two supporting lines, and a status pill. Below sit a voice bar and one primary-action line. Home shows only the centered stopwatch and one hint, without rotating history. Full button instructions live on the `?` Help page.
+Pages share a header with title, mute marker and battery, a main card, a voice bar and a primary-action line; the card contents follow the activity rather than a fixed number of text lines. Home defaults to plank and adds squat, jumping-jack and stretch pages with lightweight line-and-circle action illustrations, centered timing and activity-position indicators. Interval activities show phase, round and progress. There is no history carousel. Full button instructions live on the `?` Help page.
 
 ![Actual desktop LVGL rendering: Office / Gym / Home, not device photographs](assets/images/health-modes.png)
 
@@ -34,9 +34,9 @@ The physical button order from top to bottom is **UP → DOWN → OK**. Gestures
 | DOWN | Lower output volume by 10 percentage points, down to mute | Next page |
 | OK | Perform the current page's primary action | Speak after the listening cue; release to send |
 
-Each hold triggers once, with no short action on release. No double-clicks or chords. Short OK logs 250 ml in Office, starts or ends a 90-second rest in Gym, and starts, cancels preparation, or ends the plank timer in Home. With an active interval plan it ends that workout.
+Each hold triggers once, with no short action on release. No double-clicks or chords. Short OK logs 250 ml in Office and starts or ends a 90-second rest in Gym. In Home it starts the selected activity, cancels plank preparation or stops the activity on its own page. If a different Home activity is already running, the first short OK returns to that activity without stopping it; press OK there to stop before starting another.
 
-Pages wrap through Office → Gym → Home → `?`. Paging to `?` shows help; short OK returns to the previous business page. No extra gesture or interruption to exercise is required.
+Pages wrap through Office → Gym → Home plank → Home squat → Home jumping jacks → Home stretch → `?`; long UP follows the reverse order. All four activity pages highlight Home. Paging to `?` shows help; short OK returns to the previous business page. No extra gesture or interruption to exercise is required.
 
 Volume affects both speech and cues and is saved about one second after adjustment stops. Mute does not disable the microphone. Paging preserves timers; voice records do not change the selected page. Activity reminders dismiss themselves without standing acknowledgements. There is no physical undo action.
 
@@ -49,6 +49,8 @@ For voice debugging, [per-utterance traces](docs/health-companion.md#5-per-utter
 ### 2. Voice Commands (StepAudio 3 Natural Language Capabilities)
 
 Long-press OK, speak naturally after the listening cue, and release to send. Wait for the current reply to finish before starting the next utterance.
+
+These examples describe the tool interface, not a claim that every utterance passed on hardware. The previously tested spoken bench-press set did not add a record; see the [device acceptance boundary](docs/plan.md#device-acceptance-boundary). The offline Home additions do not resolve that voice failure.
 
 #### ① Gym Strength Tracking (23 Whitelisted Exercises, Multi-sets, Auto Units & Error Correction)
 - **Direct logging**: "Bench press 60 kg 8 reps", "Squat 100 kg 5 reps for 3 sets", "Seated cable row 45 kg 12 reps", "Pull-ups bodyweight 10 reps".
@@ -78,7 +80,7 @@ Long-press OK, speak naturally after the listening cue, and release to send. Wai
 
 - **Office**: Activity reminders every 45 minutes and hydration reminders every 60 minutes sound once and dismiss themselves. Short OK or speech logs water; speech can snooze reminders. The device does not determine whether you stood up.
 - **Gym**: Long-press OK to report exercise, load, reps and sets. A successful log starts rest. Short OK ends rest early; its final three seconds use preparation cues and completion uses the start signal.
-- **Home**: Short OK starts four preparation beats for a plank; speech can start an interval plan. Short UP/DOWN changes volume, long UP/DOWN pages, and neither ends exercise. Only short OK cancels or ends the current exercise.
+- **Home**: Plank remains the default free stopwatch, with four preparation beats. Squat and jumping jacks each run 30 s work / 20 s rest × 3 rounds; stretch runs 40 s / 10 s × 3, including the final rest. Select and start these presets entirely offline; speech can request a custom interval plan. Paging and volume changes preserve timing. See [offline Home activities](docs/health-companion.md#offline-home-activities) for illustrations, phase/round displays and active-workout protection.
 
 ---
 
@@ -103,7 +105,7 @@ sequenceDiagram
 ### Zero-PSRAM Optimization Highlights
 - **Direct Realtime Voice on 400 KB SRAM**: ESP32-C3 has no external PSRAM. By wrapping mbedTLS configuration at link time, the client requests **RFC 6066 Max Fragment Length (4096 bytes)**, strictly limiting inbound TLS records to 4KB and preventing heap allocations of ~16.7KB from failing with `-0x7F00`.
 - **Streaming Audio Pipeline**: 16 kHz uplink audio is chunked into 80ms base64 segments. Downlink 24 kHz audio is resampled to 16 kHz in real time on the chip without buffering entire audio files in memory.
-- **Offline Resilience**: Even when disconnected from Wi-Fi, local three-button mode switching, sedentary/hydration timers, gym rest countdowns, and plank stopwatch operate reliably.
+- **Offline operation**: Local three-button navigation, activity/hydration timers, gym rest countdowns, the plank stopwatch and the three Home interval presets do not require Wi-Fi or speech. Voice requests still require connectivity.
 - **Privacy**: Audio is not stored locally; logs omit passwords and API keys. Provisioned credentials reside in NVS. The optional untracked `sdkconfig.local` embeds credentials in firmware, so those images must not be published. NVS is not described as encrypted unless encryption is enabled.
 
 ---

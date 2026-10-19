@@ -15,6 +15,8 @@ idf_component_register(
          "tls_mfl.c"
          "health_exercise.c"
          "health_log.c"
+         "health_activity.c"
+         "health_motion.c"
          "health_cfg.c"
          "health_wifi.c"
          "health_portal.c"

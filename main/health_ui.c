@@ -2,6 +2,7 @@
 #include "health_exercise.h"
 #include "plank_audio.h"
 #include "ui_pixel.h"
+#include "health_motion.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -23,6 +24,8 @@ static lv_obj_t *s_title;
 
 static lv_obj_t *s_card;
 static lv_obj_t *s_help_card;
+static lv_obj_t *s_activity_progress;
+static health_motion_t s_motion;
 static lv_obj_t *s_mute;
 static lv_obj_t *s_cup_wrap;
 static lv_obj_t *s_cup_body;
@@ -106,7 +109,7 @@ static void place(lv_obj_t *obj, int x, int y, int w)
 
 static void show(health_ui_mode_t mode)
 {
-    if (mode == HEALTH_UI_HELP && s_mode >= HEALTH_UI_EVERYDAY && s_mode <= HEALTH_UI_HOME)
+    if (mode == HEALTH_UI_HELP && s_mode >= HEALTH_UI_EVERYDAY && s_mode <= HEALTH_UI_STRETCH)
         s_help_return = s_mode;
     s_mode = mode;
     if (mode == HEALTH_UI_HOME) {
@@ -149,6 +152,15 @@ void health_ui_create(lv_obj_t *plank_screen)
         lv_label_set_text(line, help_lines[i]);
     }
     lv_obj_add_flag(s_help_card, LV_OBJ_FLAG_HIDDEN);
+    health_motion_create(&s_motion, s_card, 61, 40);
+    s_activity_progress = lv_bar_create(s_card);
+    lv_obj_set_pos(s_activity_progress, 24, 168);
+    lv_obj_set_size(s_activity_progress, 170, 4);
+    lv_obj_set_style_bg_color(s_activity_progress, lv_color_hex(0xD9E7EC), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(s_activity_progress, lv_color_hex(UI_GRASS), LV_PART_INDICATOR);
+    lv_obj_set_style_shadow_width(s_activity_progress, 0, LV_PART_MAIN);
+    lv_obj_add_flag(s_motion.root, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(s_activity_progress, LV_OBJ_FLAG_HIDDEN);
 
     s_title = label(s_screen, 22, 55, 104, &plank_zh_16, UI_INK, LV_TEXT_ALIGN_LEFT);
     s_mute = label(s_screen, 130, 55, 44, &plank_zh_16, UI_INK, LV_TEXT_ALIGN_RIGHT);
@@ -240,17 +252,11 @@ void health_ui_set_mode(health_ui_mode_t mode)
 unsigned health_ui_action(health_action_t action, health_log_t *log,
                           plank_model_t *model, uint64_t now_ms)
 {
-    if (s_mode == HEALTH_UI_PORTAL) return PLANK_EFFECT_NONE;
     if (action == HEALTH_ACTION_PREVIOUS_MODE || action == HEALTH_ACTION_NEXT_MODE) {
-        unsigned index = s_mode == HEALTH_UI_GYM ? 1 : s_mode == HEALTH_UI_HOME ? 2 :
-                         s_mode == HEALTH_UI_HELP ? 3 : 0;
-        index = (index + (action == HEALTH_ACTION_NEXT_MODE ? 1 : 3)) % 4;
-        const health_ui_mode_t modes[] = {
-            HEALTH_UI_EVERYDAY, HEALTH_UI_GYM, HEALTH_UI_HOME, HEALTH_UI_HELP,
-        };
-        show(modes[index]);
+        show(health_activity_next(s_mode, action == HEALTH_ACTION_NEXT_MODE));
         return PLANK_EFFECT_NONE;
     }
+    if (s_mode == HEALTH_UI_PORTAL) return PLANK_EFFECT_NONE;
     if (action != HEALTH_ACTION_CONFIRM) return PLANK_EFFECT_NONE;
     if (s_mode == HEALTH_UI_HELP) {
         show(s_help_return);
@@ -266,13 +272,12 @@ unsigned health_ui_action(health_action_t action, health_log_t *log,
             return HEALTH_SOUND_RELAX;
         }
         health_log_rest(log, HEALTH_REST_DEFAULT_S, now_ms);
-    } else if (s_mode == HEALTH_UI_HOME) {
-        if (log && log->interval_on) {
-            log->interval_on = false;
-            show(HEALTH_UI_HOME);
-            return PLANK_EFFECT_STOP;
-        }
-        if (model) return plank_key(model, PLANK_OK, now_ms);
+    } else if (s_mode >= HEALTH_UI_HOME && s_mode <= HEALTH_UI_STRETCH) {
+        health_ui_mode_t target = s_mode;
+        unsigned effect = health_activity_confirm(&target, log, model, now_ms);
+        show(target);
+        if (effect == HEALTH_SOUND_ERROR) health_ui_notice("请先结束当前训练", now_ms);
+        return effect;
     }
     return PLANK_EFFECT_NONE;
 }
@@ -327,10 +332,13 @@ void health_ui_refresh(const health_log_t *log, const plank_model_t *model,
     uint32_t voice_bg;
     const char *voice_text = voice_feedback(voice, now_ms, &voice_bg);
     bool volume_visible = now_ms < s_volume_until_ms;
-    if (s_mode == HEALTH_UI_HOME && (!log || !log->interval_on)) {
+    bool voice_plan = log && log->interval_activity == HEALTH_ACTIVITY_VOICE &&
+                      (log->interval_on || log->interval_finished);
+    if (s_mode == HEALTH_UI_HOME && !voice_plan) {
         if (s_plank && lv_screen_active() != s_plank) lv_screen_load(s_plank);
         if (model) plank_ui_refresh(model, now_ms, battery, audio_ok, buttons_ok,
-                                    voice_text, voice_bg, s_volume, volume_visible);
+                                    voice_text, voice_bg, s_volume, volume_visible,
+                                    log && log->interval_on ? health_activity_get(log->interval_activity)->name : NULL);
         return;
     }
     if (lv_screen_active() != s_screen) lv_screen_load(s_screen);
@@ -362,6 +370,60 @@ void health_ui_refresh(const health_log_t *log, const plank_model_t *model,
     }
     lv_obj_clear_flag(s_card, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(s_help_card, LV_OBJ_FLAG_HIDDEN);
+    if (s_mode >= HEALTH_UI_HOME && s_mode <= HEALTH_UI_STRETCH) {
+        lv_obj_add_flag(s_cup_wrap, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(s_big_unit, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(s_line1_sub, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(s_alert_box, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_clear_flag(s_motion.root, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_clear_flag(s_activity_progress, LV_OBJ_FLAG_HIDDEN);
+        place(s_line1, 10, 86, 198);
+        place(s_big, 10, 106, 198);
+        place(s_line2, 10, 146, 198);
+        place(s_line3, 10, 175, 198);
+        lv_obj_set_style_text_align(s_line1, LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_set_style_text_align(s_big, LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_set_style_text_align(s_line2, LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_set_style_text_align(s_line3, LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_set_style_text_color(s_line3, lv_color_hex(UI_SKY_DARK), 0);
+        health_activity_id_t id = (health_activity_id_t)(s_mode - HEALTH_UI_HOME);
+        const health_activity_def_t *def = health_activity_get(id);
+        bool owns = log && log->interval_activity == id;
+        bool active = owns && log->interval_on;
+        bool finished = owns && log->interval_finished;
+        bool conflict = (log && log->interval_on && !owns) || health_activity_plank_busy(model);
+        unsigned work = owns && (active || finished) ? log->interval_work_s : def->work_s;
+        unsigned rest = owns && (active || finished) ? log->interval_rest_s : def->rest_s;
+        unsigned rounds = owns && (active || finished) ? log->interval_rounds : def->rounds;
+        unsigned remaining = active && log->interval_until_ms > now_ms ?
+                             (unsigned)((log->interval_until_ms - now_ms + 999) / 1000) :
+                             finished ? 0 : work;
+        lv_label_set_text(s_title, def->name);
+        health_motion_show(&s_motion, id ? (unsigned)id : 4,
+                           active && log->interval_work, now_ms);
+        if (conflict) {
+            const char *running = health_activity_plank_busy(model) ? "平板支撑" :
+                                  health_activity_get(log->interval_activity)->name;
+            lv_label_set_text_fmt(s_line1, "%s进行中", running);
+        } else lv_label_set_text(s_line1, active ? (log->interval_work ? "运动中" : "休息中") :
+                                finished ? "训练完成" : def->hint);
+        lv_label_set_text_fmt(s_big, "%02u:%02u", remaining / 60, remaining % 60);
+        if (active || finished)
+            lv_label_set_text_fmt(s_line2, "%s %u/%u 轮", finished ? "完成" : "当前",
+                                  (unsigned)log->interval_round, rounds);
+        else lv_label_set_text_fmt(s_line2, "%u秒动 / %u秒休 / %u轮", work, rest, rounds);
+        unsigned total = (work + rest) * rounds;
+        unsigned elapsed = finished ? total : 0;
+        if (active) elapsed = (log->interval_round - 1) * (work + rest) +
+                              (log->interval_work ? work : work + rest) - remaining;
+        lv_bar_set_value(s_activity_progress, total ? (int)(elapsed * 100 / total) : 0, LV_ANIM_OFF);
+        if (id) lv_label_set_text_fmt(s_line3, "%u/4 长按上/下切换", (unsigned)id + 1);
+        else lv_label_set_text(s_line3, "语音计划 长按上/下切换");
+        lv_label_set_text(s_keys1, !buttons_ok ? "按键不可用，请重新开机" : conflict ?
+                          "确定:查看进行中训练" : active ? "确定:结束训练" :
+                          finished && id == HEALTH_ACTIVITY_VOICE ? "确定:返回平板" : "确定:开始");
+        return;
+    }
 
     const char *title = "";
     char big_str[32] = "";
@@ -376,6 +438,17 @@ void health_ui_refresh(const health_log_t *log, const plank_model_t *model,
     char k1_str[64] = "";
 
     lv_obj_add_flag(s_cup_wrap, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(s_motion.root, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(s_activity_progress, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(s_big_unit, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(s_line1_sub, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(s_alert_box, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_style_text_align(s_line1, LV_TEXT_ALIGN_LEFT, 0);
+    lv_obj_set_style_text_align(s_big, LV_TEXT_ALIGN_LEFT, 0);
+    lv_obj_set_style_text_align(s_line2, LV_TEXT_ALIGN_LEFT, 0);
+    lv_obj_set_style_text_align(s_line3, LV_TEXT_ALIGN_RIGHT, 0);
+    lv_obj_set_style_text_color(s_line3, lv_color_hex(UI_INK), 0);
+    place(s_line3, 104, 56, 102);
     lv_obj_set_pos(s_big, 14, 44);
     place(s_line1, 14, 92, 196);
     place(s_line1_sub, 14, 112, 196);
@@ -459,21 +532,6 @@ void health_ui_refresh(const health_log_t *log, const plank_model_t *model,
         }
 
         snprintf(k1_str, sizeof(k1_str), "确定:%s休息", rest_s ? "结束" : "开始");
-    } else if (log && log->interval_on) {
-        title = "间歇跟练";
-        unsigned rem_s = log->interval_until_ms > now_ms ?
-            (unsigned)((log->interval_until_ms - now_ms + 999) / 1000) : 0;
-        snprintf(big_str, sizeof(big_str), "%u", rem_s);
-        snprintf(unit_str, sizeof(unit_str), "秒");
-        snprintf(line3_str, sizeof(line3_str), "%u / %u 轮",
-                 (unsigned)log->interval_round, (unsigned)log->interval_rounds);
-        snprintf(line1_str, sizeof(line1_str), "当前阶段: %s",
-                 log->interval_work ? "运动" : "休息");
-        snprintf(alert_str, sizeof(alert_str), "%s",
-                 log->interval_work ? "加油坚持" : "放松呼吸");
-        alert_bg = log->interval_work ? UI_ORANGE : UI_GRASS;
-        alert_fg = log->interval_work ? UI_INK : 0xFFFFFF;
-        snprintf(k1_str, sizeof(k1_str), "确定:结束训练");
     }
 
     lv_label_set_text(s_title, title);

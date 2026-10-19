@@ -3,6 +3,7 @@
 #include "health_input.h"
 #include "health_log.h"
 #include "plank_core.h"
+#include "health_activity.h"
 
 #include "plank_ui.h"
 #include "lvgl.h"
@@ -10,14 +11,6 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-typedef enum {
-    HEALTH_UI_PORTAL,
-    HEALTH_UI_MENU,
-    HEALTH_UI_EVERYDAY,
-    HEALTH_UI_GYM,
-    HEALTH_UI_HOME,
-    HEALTH_UI_HELP,
-} health_ui_mode_t;
 
 typedef enum {
     HEALTH_VOICE_OFF,

@@ -29,7 +29,8 @@
 | [`images/readme-hardware-specs.png`](images/readme-hardware-specs.png) | 2172 × 724，PNG RGBA | 保留为可选技术参考图，不再用于首页主视觉。于 2026-09-17 使用内置图像生成工具为本仓库生成；已根据文档中的硬件能力契约核对图中的六项标签与参数。 |
 | [`images/logo-wordmark.png`](images/logo-wordmark.png) | 1648 × 336，PNG RGBA | 从仓库原始 `images/logo.png` 中精确裁切并去除背景的黑色字标；用于中英文项目 README 的浅色主题。 |
 | [`images/logo-wordmark-dark.png`](images/logo-wordmark-dark.png) | 1648 × 336，PNG RGBA | 提取字标的白色版本；README 使用 `<picture>` 在 GitHub 深色主题下显示。 |
-| [`images/health-modes.png`](images/health-modes.png) | 720 × 320，PNG | `tests/ui/test_health_ui.c` 使用真实 LVGL 渲染办公／健身／居家三页，以 `magick build/plank-ui/previews/{office,gym,home}.png +append assets/images/health-modes.png` 拼接。应用自有界面，按仓库许可证分发；用于 README 和产品指南，不是真机照片。 |
+| [`images/health-modes.png`](images/health-modes.png) | 720 × 320，PNG | `tests/ui/test_health_ui.c` 使用真实桌面 LVGL 渲染办公／健身／默认居家平板三页。应用自有界面，按仓库许可证分发；用于 README 和产品指南，不是真机照片。 |
+| [`images/health-home-activities.png`](images/health-home-activities.png) | 960 × 320，PNG | 使用同一真实桌面 LVGL 渲染器生成并拼接居家平板／深蹲／开合跳／拉伸四页，用于产品指南。动作示意为应用自有的 LVGL 线条与圆形，遵循仓库许可证，并非下载图片或传感器读数。这是桌面预览，不是真机验收证据。 |
 
 - 使用描述性命名，并记录尺寸、像素格式、转换步骤与目标路径。
 - 优先采用适合 240 × 320 RGB565 显示的格式，并纳入 Flash 与内部 RAM 考量。

@@ -443,7 +443,7 @@ void app_main(void)
             step_trace_tool(tool.trace_turn, "tool.execute", tool.call_id, tool.name,
                             tool.arguments, NULL, "started", NULL);
             const uint32_t revision = s_log.revision;
-            if (!health_log_tool(&s_log, tool.name, tool.arguments, now, out, sizeof(out)))
+            if (!health_activity_tool(&s_log, &s_model, tool.name, tool.arguments, now, out, sizeof(out)))
                 snprintf(out, sizeof(out), "{\"ok\":false,\"reason\":\"unknown_tool\"}");
             if (s_log.revision != revision) {
                 if (persist_health(now)) {

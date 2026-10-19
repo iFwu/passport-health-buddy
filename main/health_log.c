@@ -126,8 +126,11 @@ void health_log_rest(health_log_t *log, unsigned seconds, uint64_t now_ms)
 bool health_log_start_interval(health_log_t *log, unsigned work_s, unsigned rest_s,
                                unsigned rounds, uint64_t now_ms)
 {
+    if (log->interval_on) return false;
     if (work_s == 0 || work_s > 600 || rest_s > 600 || rounds == 0 || rounds > 40) return false;
     log->interval_on = true;
+    log->interval_finished = false;
+    log->interval_activity = 0;
     log->interval_work = true;
     log->interval_work_s = (uint16_t)work_s;
     log->interval_rest_s = (uint16_t)rest_s;
@@ -196,30 +199,21 @@ bool health_log_tick(health_log_t *log, uint64_t now_ms)
         log->timer_running = false;
         alert = true;
     }
-    if (!log->interval_on || now_ms < log->interval_until_ms) return alert;
-    if (log->interval_work) {
-        log->interval_work = false;
-        if (log->interval_rest_s == 0) {
-            if (log->interval_round >= log->interval_rounds) {
-                log->interval_on = false;
-                return true;
-            }
+    while (log->interval_on && now_ms >= log->interval_until_ms) {
+        alert = true;
+        if (log->interval_work && log->interval_rest_s > 0) {
+            log->interval_work = false;
+            log->interval_until_ms += (uint64_t)log->interval_rest_s * 1000;
+        } else if (log->interval_round >= log->interval_rounds) {
+            log->interval_on = false;
+            log->interval_finished = true;
+        } else {
             log->interval_round++;
             log->interval_work = true;
-            log->interval_until_ms = now_ms + (uint64_t)log->interval_work_s * 1000;
-            return true;
+            log->interval_until_ms += (uint64_t)log->interval_work_s * 1000;
         }
-        log->interval_until_ms = now_ms + (uint64_t)log->interval_rest_s * 1000;
-        return true;
     }
-    if (log->interval_round >= log->interval_rounds) {
-        log->interval_on = false;
-        return true;
-    }
-    log->interval_round++;
-    log->interval_work = true;
-    log->interval_until_ms = now_ms + (uint64_t)log->interval_work_s * 1000;
-    return true;
+    return alert;
 }
 
 static const char *find_key(const char *args, const char *key)
@@ -374,6 +368,10 @@ bool health_log_tool(health_log_t *log, const char *name, const char *args,
         if (!json_uint(args, "seconds", &value)) value = HEALTH_REST_DEFAULT_S;
         health_log_rest(log, value, now_ms);
     } else if (strcmp(name, "start_interval_plan") == 0) {
+        if (log->interval_on) {
+            snprintf(out, cap, "{\"ok\":false,\"reason\":\"workout_active\"}");
+            return true;
+        }
         unsigned work = 0, rest = 0, rounds = 0;
         json_uint(args, "work_s", &work);
         json_uint(args, "rest_s", &rest);

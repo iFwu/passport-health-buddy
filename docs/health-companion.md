@@ -4,7 +4,7 @@
 
 # Wearable Health Companion: Product Design & User Guide
 
-AI Passport is worn on your chest or placed on your desk: it schedules activity and hydration reminders at work, logs gym sets and rest periods by voice, and runs intervals and planks at home. It does not detect posture, actual sedentary duration, or standing up.
+AI Passport is worn on your chest or placed on your desk: it schedules activity and hydration reminders at work, logs gym sets and rest periods by voice, and offers offline plank, squat, jumping-jack and stretch activities at home. It does not detect posture, actual sedentary duration, standing up or exercise repetitions.
 
 Powered by the **StepFun StepAudio 3 Realtime Voice Model**, 8 on-device scenario tools directly drive hardware states. Featuring a pure local state machine with Flash non-volatile memory, it eliminates smartphone dependency on an ultra-compact screen.
 
@@ -13,8 +13,8 @@ Powered by the **StepFun StepAudio 3 Realtime Voice Model**, 8 on-device scenari
 ## 1. Screen & UI Layout (Simulator Preview)
 
 Built on a 240 × 320 LCD color display, the interface uses three tiers:
-1. **Top navigation**: Office, Gym, Home and `?`, reached with long UP/DOWN. `?` is button help; short OK returns to the previous business page. These are not touch targets.
-2. **Main card**: All modes share a 224 × 200 light rounded card. A header row holds the page title (Today's water / Strength / Free timer / Help), the mute marker and battery, followed by a divider. The body has one large reading, at most two supporting lines and a status pill, without grass, characters or cast-shadow decorations.
+1. **Top navigation**: Office, Gym, Home and `?`, reached with long UP/DOWN. The page order is Office → Gym → Home plank → Home squat → Home jumping jacks → Home stretch → `?`, wrapping in both directions. All four activities highlight Home; the default Home destination is plank. `?` is button help; short OK returns to the previous business page, including its selected Home activity. These are not touch targets.
+2. **Main card**: Modes share a 224 × 200 light rounded card with a title, mute marker, battery and divider. Contents vary by activity: hydration graphics, strength readings, or an action illustration with centered timing. Help retains full button instructions; interval activities show phase, round and progress.
 3. **Status and primary action**: A 32 px voice bar and 28 px single-line footer replace permanent three-line help. Mute stays visible after the temporary volume overlay disappears.
 
 ![Actual desktop LVGL rendering: Office / Gym / Home, not device photographs](../assets/images/health-modes.png)
@@ -24,7 +24,7 @@ Built on a 240 × 320 LCD color display, the interface uses three tiers:
 ### Visual Highlights
 - **Mug and remaining amount**: The mug fills toward the goal; the reading shows `ml / goal`, and the status pill states how much is left.
 - **High-contrast Typography**: In the gym, total volume and rest timers feature prominent numerals readable at a glance from exercise equipment.
-- **Centered stopwatch**: Home shows only the centered seven-segment reading, minutes above it, and one hint line. Records are still kept in NVS but are not shown on the device.
+- **Activity-specific Home screens**: Lightweight LVGL lines and circles illustrate plank, squat, jumping jacks and stretching; they are action cues, not sensed body motion. A centered timer, activity-position indicators and a long-press navigation hint make the four pages usable offline. Interval screens expose phase, round and progress. Plank records remain in NVS without an on-device history carousel.
 
 ---
 
@@ -47,15 +47,39 @@ Shorts execute on release; a long gesture triggers once and never also executes 
 | Office | Log 250 ml; two consecutive taps log 500 ml |
 | Gym, idle | Start 90-second rest |
 | Gym, resting | End rest early |
-| Home, plank ready/result | Start four-second preparation |
-| Home, preparing | Cancel preparation |
-| Home, timing | End and request storage |
-| Home, interval plan | End the current plan |
+| Home plank, ready/result with no active interval | Start four-second preparation |
+| Home plank, preparing | Cancel preparation |
+| Home plank, timing | End and request storage |
+| Home squat/jumping jacks/stretch, no active workout | Start that page's interval preset |
+| Home, displaying the active interval's own page | End the current plan |
+| Home, another activity is already active | Return to that activity's page without stopping or replacing it; press OK there to stop |
+| Home, completed custom voice interval | Return to plank ready without starting it |
 | Help | Return to the preceding business page without affecting timers |
 
 No physical undo or standing acknowledgement. Activity reminders run every 45 minutes and hydration reminders every 60 minutes; Office notices dismiss after three seconds. Speech can snooze them. Other modes do not sound office reminders. Voice water/set logs update records without paging; explicit mode requests and interval starts may switch pages.
 
-The plank ready/result page shows only the current reading and save status; the latest 20 durations are kept in NVS without an on-device history screen. A visible save status is not proof of a successful Flash write. Volume is saved separately in NVS about one second after adjustments stop; allow this time before power-off. Failures are shown; restart uses the last successfully saved volume.
+The plank ready/result page shows the current reading and save status alongside its activity illustration; the latest 20 durations are kept in NVS without an on-device history screen. A visible save status is not proof of a successful Flash write. Volume is saved separately in NVS about one second after adjustments stop; allow this time before power-off. Failures are shown; restart uses the last successfully saved volume.
+
+### Offline Home activities
+
+Plank is the main/default Home page, including explicit voice requests to switch Home. Long UP/DOWN selects among four activities using the same global navigation as Office, Gym and Help; it also leaves the provisioning screen without requiring network setup. All four Home pages show an activity name, `1/4`–`4/4` position indicator and long-press navigation hint; short UP/DOWN remains volume control, not activity selection.
+
+| Activity | Short OK when no workout is active | Timing |
+| --- | --- | --- |
+| Plank | Start four preparation beats, then the free stopwatch | Count up until stopped; completed durations use the existing plank save path |
+| Squat | Start the local interval preset immediately | 30 s work + 20 s rest, 3 rounds |
+| Jumping jacks | Start the local interval preset immediately | 30 s work + 20 s rest, 3 rounds |
+| Stretch | Start the local interval preset immediately | 40 s work + 10 s rest, 3 rounds |
+
+Each interval round includes its rest phase, including the final round. The screen shows the work/rest phase, remaining time, round and total planned progress, then completion. The free plank timer has no invented goal or progress target. These are timed sessions, not counted reps or posture assessment. Presets stay in RAM and do not create gym-set or plank-history records. Line-and-circle action illustrations use two poses as visual prompts, not measurements or personalized coaching. Presets require neither Wi-Fi nor speech.
+
+Paging, volume changes and opening Help do not stop a workout. Only one Home workout may run: pressing short OK on another Home activity first returns to the active activity without ending it or starting a replacement; short OK on its own page cancels preparation or stops it. Voice `start_interval_plan` requests while a plank is preparing/running or an interval is active return `workout_active` rather than overwriting it. Stop the active session before starting another. Live interval state is not a power-loss recovery feature.
+
+A custom voice interval uses the default Home slot with its own voice-workout title, not the plank title. On completion, short OK returns to plank ready without starting it. Offline presets keep their own activity pages; while one runs, the plank page names the active activity and short OK returns to it. Gym rest remains independent of Home workouts.
+
+![Actual desktop LVGL rendering: plank, squat, jumping jacks and stretch; not device photographs](../assets/images/health-home-activities.png)
+
+This preview shows desktop rendering, not hardware acceptance. Build, host and physical-device evidence remain separate; see the [current acceptance boundary](plan.md#device-acceptance-boundary).
 
 ### Sound and playback rules
 
@@ -77,6 +101,8 @@ A single task writes both model speech and local cues to the speaker, without mi
 ## 3. How to Use: StepAudio 3 Voice Command Reference
 
 Powered by StepFun's **StepAudio 3 Realtime** bidirectional voice model, natural conversation triggers 8 on-device tools without rigid phrase templates:
+
+Examples describe supported tool requests, not universal hardware acceptance. The earlier spoken bench-press set failed to add a record; the offline Home iteration does not fix that issue. See the [device acceptance boundary](plan.md#device-acceptance-boundary) for the distinction between confirmed results and unverified workflows.
 
 ### 1. Gym Strength Workout Logging (`log_workout`)
 - **Direct spoken sets**:
@@ -119,7 +145,7 @@ Powered by StepFun's **StepAudio 3 Realtime** bidirectional voice model, natural
 
 - **Office**: No standing check-in. Reminders dismiss automatically; short OK or speech logs water.
 - **Gym**: Long-press OK to report exercise, load and reps. The model receives the storage result before its brief reply. Logging starts rest, with preparation cues in the final three seconds.
-- **Home**: Short OK starts a plank or ends the current exercise; speech starts an interval plan. Timers continue on other pages and remain visible when returning Home.
+- **Home**: Start the default plank stopwatch or select squat, jumping jacks or stretch and short-press OK for an offline preset. Speech can request a custom interval plan. Timers continue on other pages; return to the active activity to view or stop it. Starting another activity never silently replaces an active workout.
 
 ---
 
@@ -160,11 +186,24 @@ sequenceDiagram
 
 ## 6. Technical Architecture & Engineering Optimization
 
+### Why this is difficult on a small chip
+
+This is not just a few screens connected to a model API. With no PSRAM, the ESP32-C3 shares roughly 400 KB of internal SRAM among the system, Wi-Fi, TLS, audio, task stacks and LVGL. Its 8 MB Flash stores code and fonts, but cannot replace working RAM. The model runs in the cloud; the chip handles realtime capture, networking, streamed playback, display and reliable execution.
+
+- **More UI RAM can prevent voice connectivity.** On the same board, increasing the static LVGL pool from 48 KiB to 64 KiB passed desktop rendering but caused a TLS allocation failure, `mbedtls_ssl_setup -0x7F00`. Activity screens therefore reuse the main card and labels, and each illustration uses one custom-drawn object, retaining the 48 KiB budget. Current desktop multi-state checks observed a minimum 4,368 bytes free and a minimum largest free block of 3,024 bytes in that pool. These are desktop measurements, not whole-device heap headroom.
+- **Audio cannot wait for a complete response buffer.** Mono 16-bit PCM consumes about 32 KB/s at 16 kHz upstream and 48 KB/s at 24 kHz downstream, before Base64, JSON and network-buffer overhead. Upload, parsing and resampling must be streamed with bounded buffering. Recording, model speech and local cues also share the audio path without competing playback or microphone contamination.
+- **Small-screen rendering still costs memory.** A single 240 by 320 RGB565 framebuffer occupies 150 KiB, ruling out casual additions of full-screen buffers or complex layers. UTF-8 does not ensure Chinese display support: actual text needs a generated font subset and selected-font glyph, bounds and overlap checks. A successful compilation does not prove readable text.
+- **Three keys coordinate multiple concurrent states.** Volume, navigation, preparation, timers and speech share the same buttons. Releasing a long press must not trigger a short action; paging must preserve timers; Help must restore the selected activity; a new workout must not overwrite an active one. LVGL access needs locking, while slow audio, network and storage work must stay out of button callbacks.
+- **A spoken confirmation is not proof of a saved record.** ASR, model tool selection, argument validation, NVS storage and playback are separate failure boundaries. Per-utterance traces correlate these stages and configuration fingerprints, while content is opt-in and credentials are redacted. The existing spoken workout-recording failure remains under investigation; response examples are not acceptance results.
+
+Acceptance separates host state-machine tests, actual LVGL rendering, firmware builds, board startup/connectivity, and human observations of the display and cues. Desktop success does not replace hardware checks, and a verified flash write does not certify feature behavior.
+
 ### 1. Zero-PSRAM Optimization on ESP32-C3
 With only ~400 KB internal SRAM and no external PSRAM:
 - **RFC 6066 Max Fragment Length (MFL)**: Link-time interception of `mbedtls_ssl_config_defaults()` negotiates a 4096-byte fragment length, restricting inbound TLS records to ≤4KB and eliminating `-0x7F00` allocation failures from default 16KB records.
 - **Static Memory Footprint**: mbedTLS configured with fixed 8KB receive / 4KB send buffers with `CONFIG_MBEDTLS_DYNAMIC_BUFFER=n`; TCP receive window tightened to 8KB.
 - **Streaming Downlink Audio**: 24 kHz downlink audio is converted to 16 kHz on-the-fly via fixed-point linear interpolation directly into the ES8311 I2S ringbuffer without buffering full audio responses.
+- **Activity rendering budget**: Firmware and desktop checks both retain a 48 KiB static LVGL pool. Activity pages reuse the main card and labels; each illustration uses one custom-drawn object rather than separate objects for every limb, with no per-frame object creation. Keeping this budget reserves internal RAM for TLS and audio; startup and session connectivity remain separate device checks.
 
 ### 2. State Machine Decoupling & Host Tests
 - Core state machines (timers, unit conversions, interval workout models, and plank stopwatch) operate completely decoupled from ESP-IDF and LVGL dependencies, running host test suites in milliseconds via `gcc` in CI.

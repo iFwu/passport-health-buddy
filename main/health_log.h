@@ -48,6 +48,8 @@ typedef struct {
     bool undo_was_replace;
     uint8_t mode_request; // 0: none, 1: everyday, 2: gym, 3: home
     bool interval_on;
+    bool interval_finished;
+    uint8_t interval_activity; // 0: voice plan; 1/2/3: squat/jacks/stretch (RAM only)
     bool interval_work;
     uint16_t interval_work_s;
     uint16_t interval_rest_s;

@@ -45,7 +45,7 @@ Reproduce with `tools/step-realtime-probe.mjs` (reads `STEPFUN_API_KEY` from the
 | 10.21 | Mode menu; hydration / sitting reminders; gym `log_set` + rest timer; plank back in the menu | Walk through all three modes on device |
 | 10.22 | Rehearse on a phone hotspot, record the demo video, sync docs and Feishu | Video |
 
-If time runs short, cut in order: evening report → interval workouts → gym queries. P0 and reminders stay.
+The current offline Home iteration requires all four activities; interval presets are not optional scope. Keep unrelated evening-report and gym-query expansion separate from this iteration.
 
 ## Verification
 
@@ -65,6 +65,16 @@ If time runs short, cut in order: evening report → interval workouts → gym q
 
 The [product operating guide](health-companion.md) defines current controls and cues. The old standalone plank-timer manual describes historical firmware, not Health Buddy's button mapping.
 
+## Offline Home activity iteration
+
+- Keep plank as the default Home destination and free stopwatch. Add squat, jumping-jack and stretch pages using the existing local interval engine; no network, speech or new sensor is required to start a preset.
+- Preserve the global controls. Long navigation traverses Office → Gym → plank → squat → jumping jacks → stretch → Help, wrapping in reverse as well. All four activities highlight Home; Help returns to the previous activity without interrupting it.
+- Show distinct line-and-circle action illustrations, centered timing, activity position and navigation hints; interval screens include phase, round and progress. These are timing aids, not posture detection, repetition counting or evidence that the exercise was performed. No history carousel is added.
+- Acceptance must cover offline starts/stops for all four activities, uninterrupted timers while paging and in Help, safe handling of an already active workout, default Home routing, and unchanged volume/speech gestures. Exact presets and conflict behavior are specified in the [operating guide](health-companion.md#offline-home-activities).
+- Desktop LVGL previews, host tests, firmware build, application write verification and physical-device acceptance are separate evidence. The new Home pages and preset workflows have not yet been accepted on hardware; the earlier device result below does not cover this iteration.
+
 ## Device acceptance boundary
+
+The four-activity application ELF `093145328dd4195198d4f740caaaf9aa1d4e0d4f7fa66bc1e989adbc35adc797` belongs to verified bundle `171e17699cb55ec1a1e7a79b1ef063e780f0ebf84ac89fa5a15ef45b8f83fcfc`. The complete gate passed, including actual LVGL activity/phase rendering and conflict/navigation checks. Only the application at `0x10000` was flashed and hash-verified; partition table, NVS and Recovery were not written. Boot matched the ELF, reported buttons/audio/storage initialized and 147,144 bytes free heap at Ready, then established the StepFun realtime session. The bounded startup observation showed no panic or allocation failure. Physical viewing, button execution, phase sounds and sustained speech under activity rendering remain unverified; the earlier spoken-workout issue is not claimed fixed.
 
 Application ELF `acc633936ab9d52090669457874068dcc88078b64b40cc7a243a993bc1dcb4f9` was written only at `0x10000` and verified. Physical controls, hydration speech, cues, and hydration/mute persistence across power-off were confirmed on device. The spoken bench-press set of 60 kg for 8 reps did not add a record; interval plans remain unverified on hardware. That serial trace showed input submission, final ASR, an audio response and `response.done`, but no logged tool-call event; it does not establish whether recognition or prompt behavior failed. Further diagnosis uses the new per-utterance trace. Old-image acceptance does not certify all functions in a new image.

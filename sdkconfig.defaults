@@ -26,7 +26,7 @@ CONFIG_LV_FONT_MONTSERRAT_14=y
 CONFIG_LV_FONT_MONTSERRAT_20=y
 CONFIG_LV_FONT_MONTSERRAT_32=y
 # LVGL 9.3+ 只认 LV_MEM_SIZE（字节）。旧的 LV_MEM_SIZE_KILOBYTES 会被默认 64KB 覆盖。
-# 48KB 给计时页的字体和对象；配网页和模式页共用这块静态池，不占系统堆。
+# 48KB 静态池与桌面验证一致；活动页复用控件，为 TLS 与音频保留 RAM。
 CONFIG_LV_MEM_SIZE=49152
 
 # --- 系统 ---

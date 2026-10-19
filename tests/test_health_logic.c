@@ -1,6 +1,8 @@
 #include "b64_stream.h"
 #include "health_exercise.h"
 #include "health_log.h"
+#include "health_activity.h"
+#include "plank_audio.h"
 #include "portal_form.h"
 #include "step_rx.h"
 
@@ -169,6 +171,74 @@ static void test_records_and_reminders_without_navigation(void)
     EXPECT(health_log_take_reminders(&log, HEALTH_WATER_MS * 2 + 10 * 60000) != 0);
 }
 
+static void test_home_activities(void)
+{
+    const health_ui_mode_t pages[] = { HEALTH_UI_EVERYDAY, HEALTH_UI_GYM, HEALTH_UI_HOME,
+        HEALTH_UI_SQUAT, HEALTH_UI_JACKS, HEALTH_UI_STRETCH, HEALTH_UI_HELP };
+    for (unsigned i = 0; i < 7; i++) {
+        EXPECT(health_activity_next(pages[i], true) == pages[(i + 1) % 7]);
+        EXPECT(health_activity_next(pages[i], false) == pages[(i + 6) % 7]);
+    }
+    EXPECT(health_activity_next(HEALTH_UI_PORTAL, true) == HEALTH_UI_EVERYDAY);
+    health_log_t log;
+    plank_model_t model;
+    health_log_init(&log, NULL, 0);
+    plank_init(&model, NULL, true);
+    health_ui_mode_t page = HEALTH_UI_HOME;
+    EXPECT(health_activity_confirm(&page, &log, &model, 0) == PLANK_EFFECT_PREP_1);
+    char out[320];
+    EXPECT(health_activity_tool(&log, &model, "start_interval_plan",
+                               "{\"work_s\":30,\"rest_s\":10,\"rounds\":2}", 100, out, sizeof(out)));
+    EXPECT(strstr(out, "workout_active") && !log.interval_on);
+    page = HEALTH_UI_SQUAT;
+    EXPECT(health_activity_confirm(&page, &log, &model, 200) == HEALTH_SOUND_ERROR);
+    EXPECT(page == HEALTH_UI_HOME && model.state == PLANK_PREPARING);
+    EXPECT(health_activity_confirm(&page, &log, &model, 300) == 0);
+    EXPECT(model.state == PLANK_READY);
+    for (unsigned id = HEALTH_ACTIVITY_SQUAT; id <= HEALTH_ACTIVITY_STRETCH; id++) {
+        page = (health_ui_mode_t)(HEALTH_UI_HOME + id);
+        uint64_t now = id * 1000000;
+        const health_activity_def_t *def = health_activity_get((health_activity_id_t)id);
+        EXPECT(def->work_s == (id == HEALTH_ACTIVITY_STRETCH ? 40u : 30u));
+        EXPECT(def->rest_s == (id == HEALTH_ACTIVITY_STRETCH ? 10u : 20u));
+        EXPECT(def->rounds == 3);
+        health_log_rest(&log, 90, now);
+        uint32_t revision = log.revision;
+        EXPECT(health_activity_confirm(&page, &log, &model, now) == PLANK_EFFECT_START);
+        EXPECT(log.interval_on && log.interval_activity == id);
+        EXPECT(health_activity_page(&log) == page);
+        health_log_t before = log;
+        EXPECT(!health_log_start_interval(&log, 10, 0, 1, now));
+        EXPECT(health_activity_tool(&log, &model, "start_interval_plan",
+                                   "{\"work_s\":10,\"rounds\":1}", now, out, sizeof(out)));
+        EXPECT(strstr(out, "workout_active"));
+        EXPECT(memcmp(&before, &log, sizeof(log)) == 0);
+        page = HEALTH_UI_HOME;
+        EXPECT(health_activity_confirm(&page, &log, &model, now + 1) == HEALTH_SOUND_ERROR);
+        EXPECT(page == health_activity_page(&log) && log.interval_on && model.state == PLANK_READY);
+        EXPECT(health_log_tick(&log, now + def->work_s * 1000));
+        EXPECT(!log.interval_work && log.interval_round == 1 && log.timer_running);
+        EXPECT(health_log_tick(&log, now + 100000));
+        EXPECT(log.interval_work && log.interval_round == 3 && !log.timer_running);
+        EXPECT(health_log_tick(&log, now + 150000));
+        EXPECT(!log.interval_on && log.interval_finished);
+        EXPECT(log.revision == revision && model.history.count == 0);
+        EXPECT(health_activity_confirm(&page, &log, &model, now + 150001) == PLANK_EFFECT_START);
+        EXPECT(!log.interval_finished);
+        EXPECT(health_activity_confirm(&page, &log, &model, now + 150002) == PLANK_EFFECT_STOP);
+        EXPECT(!log.interval_on && !log.interval_finished);
+    }
+    EXPECT(health_activity_tool(&log, &model, "start_interval_plan",
+                               "{\"work_s\":10,\"rest_s\":0,\"rounds\":2}", 4000000, out, sizeof(out)));
+    EXPECT(log.interval_activity == HEALTH_ACTIVITY_VOICE && log.mode_request == 3);
+    EXPECT(health_log_tick(&log, 4020000) && log.interval_finished);
+    page = HEALTH_UI_HOME;
+    EXPECT(health_activity_confirm(&page, &log, &model, 4020001) == 0);
+    EXPECT(!log.interval_finished && model.state == PLANK_READY);
+    EXPECT(health_activity_tool(&log, &model, "set_mode", "{\"mode\":\"home\"}", 4020002, out, sizeof(out)));
+    EXPECT(log.mode_request == 3);
+}
+
 static void test_step_events(void)
 {
     step_rx_t *rx = step_rx_create(on_pcm, NULL);
@@ -228,6 +298,7 @@ int main(void)
     test_day_rollover_and_workout();
     test_timer_and_interval();
     test_records_and_reminders_without_navigation();
+    test_home_activities();
     test_step_events();
     test_form();
     if (g_failures) {

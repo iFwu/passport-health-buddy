@@ -5,6 +5,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
+LV_FONT_DECLARE(plank_zh_16);
 
 static uint16_t s_buffer[240 * 320];
 static unsigned char s_pixels[240 * 320 * 3];
@@ -19,6 +20,7 @@ static plank_model_t s_model;
 static unsigned s_volume = 50;
 static unsigned s_voice_starts, s_voice_stops;
 static bool s_recording;
+static size_t s_min_free = SIZE_MAX, s_min_block = SIZE_MAX;
 
 static void flush(lv_display_t *display, const lv_area_t *area, uint8_t *pixels)
 {
@@ -102,6 +104,16 @@ static void check_objects(lv_obj_t *obj, bool overlaps)
         check_objects(lv_obj_get_child(obj, (int)i), overlaps);
 }
 
+static bool visible_text(lv_obj_t *obj, const char *text)
+{
+    if (lv_obj_has_flag(obj, LV_OBJ_FLAG_HIDDEN)) return false;
+    if (lv_obj_check_type(obj, &lv_label_class) && strcmp(lv_label_get_text(obj), text) == 0)
+        return true;
+    for (unsigned i = 0; i < lv_obj_get_child_count(obj); i++)
+        if (visible_text(lv_obj_get_child(obj, (int)i), text)) return true;
+    return false;
+}
+
 static void check_regions(void)
 {
     bool card = false, voice = false, footer = false;
@@ -135,6 +147,14 @@ static void frame(uint64_t now, health_voice_state_t voice, bool volume_visible,
 {
     health_ui_refresh(&s_log, &s_model, now, 75, "", true, true, voice);
     lv_obj_update_layout(lv_screen_active());
+    lv_mem_monitor_t memory;
+    lv_mem_monitor(&memory);
+    if (memory.free_biggest_size < 2048)
+        fprintf(stderr, "UI draw headroom exhausted: free=%zu largest=%zu mode=%u\n",
+                memory.free_size, memory.free_biggest_size, (unsigned)health_ui_mode());
+    assert(memory.free_biggest_size >= 2048);
+    if (memory.free_size < s_min_free) s_min_free = memory.free_size;
+    if (memory.free_biggest_size < s_min_block) s_min_block = memory.free_biggest_size;
     s_label_count = 0;
     s_footer_labels = 0;
     check_objects(lv_screen_active(), !volume_visible);
@@ -143,6 +163,10 @@ static void frame(uint64_t now, health_voice_state_t voice, bool volume_visible,
     lv_obj_invalidate(lv_screen_active());
     lv_tick_inc(40);
     lv_timer_handler();
+    lv_mem_monitor(&memory);
+    assert(memory.free_biggest_size >= 2048);
+    if (memory.free_size < s_min_free) s_min_free = memory.free_size;
+    if (memory.free_biggest_size < s_min_block) s_min_block = memory.free_biggest_size;
     assert(s_flushes > before);
     if (!name) return;
     char filename[1024];
@@ -214,79 +238,138 @@ static void voice_hold(uint64_t now)
 
 static void help_navigation(const char *directory)
 {
-    const health_ui_mode_t pages[] = { HEALTH_UI_EVERYDAY, HEALTH_UI_GYM, HEALTH_UI_HOME };
-    for (unsigned i = 0; i < sizeof(pages) / sizeof(pages[0]); i++) {
-        uint64_t now = 40000 + i * 10000;
+    const health_ui_mode_t pages[] = { HEALTH_UI_EVERYDAY, HEALTH_UI_GYM, HEALTH_UI_HOME,
+        HEALTH_UI_SQUAT, HEALTH_UI_JACKS, HEALTH_UI_STRETCH, HEALTH_UI_HELP };
+    health_ui_set_mode(HEALTH_UI_EVERYDAY);
+    for (unsigned i = 0; i < 7; i++)
+        hold_mode(HEALTH_KEY_DOWN, pages[(i + 1) % 7], 40000 + i * 1100);
+    for (unsigned i = 0; i < 7; i++)
+        hold_mode(HEALTH_KEY_UP, pages[(13 - i) % 7], 50000 + i * 1100);
+    for (unsigned i = 0; i < 6; i++) {
+        uint64_t now = 60000 + i * 5000;
         health_ui_set_mode(pages[i]);
         health_log_t log = s_log;
         plank_model_t model = s_model;
-        health_ui_mode_t target = pages[i];
-        if (pages[i] == HEALTH_UI_EVERYDAY) {
-            hold_mode(HEALTH_KEY_UP, HEALTH_UI_HELP, now);
-        } else {
-            if (pages[i] == HEALTH_UI_GYM) {
-                hold_mode(HEALTH_KEY_DOWN, HEALTH_UI_HOME, now);
-                target = HEALTH_UI_HOME;
-            }
-            hold_mode(HEALTH_KEY_DOWN, HEALTH_UI_HELP, now + 1100);
-        }
-        frame(now + 2200, HEALTH_VOICE_READY, false, directory, i == 0 ? "help" : NULL);
-        assert(tap(HEALTH_KEY_UP, now + 2300) == 0 && s_volume == 60);
-        assert(tap(HEALTH_KEY_DOWN, now + 2400) == 0 && s_volume == 50);
-        assert(health_ui_mode() == HEALTH_UI_HELP);
-        voice_hold(now + 2500);
-        assert(tap(HEALTH_KEY_OK, now + 3700) == 0);
-        assert(health_ui_mode() == target);
+        health_ui_set_mode(HEALTH_UI_HELP);
+        health_ui_set_mode(HEALTH_UI_HELP);
+        frame(now, HEALTH_VOICE_READY, false, directory, i == 0 ? "help" : NULL);
+        assert(tap(HEALTH_KEY_UP, now + 100) == 0 && s_volume == 60);
+        assert(tap(HEALTH_KEY_DOWN, now + 200) == 0 && s_volume == 50);
+        voice_hold(now + 300);
+        assert(tap(HEALTH_KEY_OK, now + 1500) == 0);
+        assert(health_ui_mode() == pages[i]);
         assert(memcmp(&s_log, &log, sizeof(log)) == 0);
         assert(memcmp(&s_model, &model, sizeof(model)) == 0);
-
-        // Direct application page selection remembers each business page too.
-        health_ui_set_mode(pages[i]);
-        health_ui_set_mode(HEALTH_UI_HELP);
-        health_ui_set_mode(HEALTH_UI_HELP);
-        assert(tap(HEALTH_KEY_OK, now + 3800) == 0);
-        assert(health_ui_mode() == pages[i]);
     }
-    health_ui_set_mode(HEALTH_UI_HOME);
-    hold_mode(HEALTH_KEY_DOWN, HEALTH_UI_HELP, 70000);
-    hold_mode(HEALTH_KEY_DOWN, HEALTH_UI_EVERYDAY, 71100);
-    hold_mode(HEALTH_KEY_UP, HEALTH_UI_HELP, 72200);
-    hold_mode(HEALTH_KEY_UP, HEALTH_UI_HOME, 73300);
+    health_ui_set_mode(HEALTH_UI_PORTAL);
+    hold_mode(HEALTH_KEY_DOWN, HEALTH_UI_EVERYDAY, 91000);
 }
 
 static void timers_through_help(const char *directory)
 {
+    health_log_init(&s_log, NULL, 0);
+    plank_init(&s_model, NULL, true);
     health_ui_set_mode(HEALTH_UI_HOME);
-    assert(tap(HEALTH_KEY_OK, 80000) == PLANK_EFFECT_PREP_1);
-    hold_mode(HEALTH_KEY_DOWN, HEALTH_UI_HELP, 80100);
-    assert(plank_tick(&s_model, 84002) == PLANK_EFFECT_START);
-    assert(s_model.state == PLANK_RUNNING);
-    frame(88000, HEALTH_VOICE_READY, false, directory, NULL);
-    uint64_t elapsed = plank_elapsed(&s_model, 88000);
-    voice_hold(88100);
-    assert(tap(HEALTH_KEY_OK, 89500) == 0);
+    assert(tap(HEALTH_KEY_OK, 100000) == PLANK_EFFECT_PREP_1);
+    health_ui_set_mode(HEALTH_UI_HELP);
+    assert(plank_tick(&s_model, 104002) == PLANK_EFFECT_START);
+    frame(108000, HEALTH_VOICE_READY, false, directory, "help-plank-running");
+    uint64_t elapsed = plank_elapsed(&s_model, 108000);
+    voice_hold(108100);
+    assert(tap(HEALTH_KEY_OK, 109500) == 0);
     assert(health_ui_mode() == HEALTH_UI_HOME && s_model.state == PLANK_RUNNING);
-    assert(plank_elapsed(&s_model, 89501) > elapsed);
+    assert(plank_elapsed(&s_model, 109501) > elapsed);
+    char out[320];
+    assert(health_activity_tool(&s_log, &s_model, "start_interval_plan",
+                                "{\"work_s\":30,\"rest_s\":10,\"rounds\":3}", 110000, out, sizeof(out)));
+    assert(strstr(out, "workout_active") && !s_log.interval_on);
+    hold_mode(HEALTH_KEY_DOWN, HEALTH_UI_SQUAT, 110100);
+    frame(111200, HEALTH_VOICE_READY, false, directory, "home-squat-plank-active");
+    assert(tap(HEALTH_KEY_OK, 111300) == HEALTH_SOUND_ERROR);
+    assert(health_ui_mode() == HEALTH_UI_HOME && s_model.state == PLANK_RUNNING);
+    assert(tap(HEALTH_KEY_OK, 111400) & PLANK_EFFECT_STOP);
+    plank_saved(&s_model, true);
+    health_log_rest(&s_log, 90, 112000);
+    hold_mode(HEALTH_KEY_DOWN, HEALTH_UI_SQUAT, 112100);
+    assert(tap(HEALTH_KEY_OK, 113200) == PLANK_EFFECT_START);
+    uint64_t until = s_log.interval_until_ms, rest_until = s_log.rest_until_ms;
+    health_ui_set_mode(HEALTH_UI_HOME);
+    frame(114000, HEALTH_VOICE_READY, false, directory, "home-squat-active");
+    health_ui_set_mode(HEALTH_UI_HELP);
+    assert(health_log_tick(&s_log, until));
+    assert(s_log.interval_on && !s_log.interval_work && s_log.rest_until_ms == rest_until);
+    frame(until, HEALTH_VOICE_READY, false, directory, "help-interval-running");
+    assert(tap(HEALTH_KEY_OK, until + 100) == 0);
+    assert(health_ui_mode() == HEALTH_UI_HOME);
+    assert(tap(HEALTH_KEY_OK, until + 200) == HEALTH_SOUND_ERROR);
+    assert(health_ui_mode() == HEALTH_UI_SQUAT && s_log.interval_on);
+    assert(tap(HEALTH_KEY_OK, until + 300) == PLANK_EFFECT_STOP);
+    assert(!s_log.interval_on && s_log.timer_running && s_model.history.count == 1);
+}
 
-    health_log_rest(&s_log, 90, 90000);
-    assert(health_log_start_interval(&s_log, 30, 10, 3, 90000));
-    uint64_t rest_until = s_log.rest_until_ms;
-    hold_mode(HEALTH_KEY_DOWN, HEALTH_UI_HELP, 90100);
-    assert(health_log_rest_left_s(&s_log, 95000) == 85);
-    assert(health_log_tick(&s_log, 120000));
-    assert(s_log.interval_on && !s_log.interval_work);
-    assert(s_log.rest_until_ms == rest_until);
-    frame(120001, HEALTH_VOICE_READY, false, directory, NULL);
-    assert(tap(HEALTH_KEY_OK, 120100) == 0);
+static void activity_screens(const char *directory)
+{
+    const char *names[] = { "home-squat", "home-jacks", "home-stretch" };
+    health_log_init(&s_log, NULL, 0);
+    plank_init(&s_model, NULL, true);
+    for (unsigned i = 0; i < 3; i++) {
+        uint64_t now = 400000 + i * 200000;
+        health_ui_mode_t page = (health_ui_mode_t)(HEALTH_UI_SQUAT + i);
+        health_ui_set_mode(page);
+        frame(now, HEALTH_VOICE_OFF, false, directory, names[i]);
+        assert(visible_text(lv_screen_active(), health_activity_get((health_activity_id_t)(i + 1))->name));
+        assert(visible_text(lv_screen_active(), "确定:开始"));
+        voice_hold(now + 10);
+        assert(tap(HEALTH_KEY_OK, now + 1200) == PLANK_EFFECT_START);
+        char name[64];
+        snprintf(name, sizeof(name), "%s-work", names[i]);
+        frame(now + 2000, HEALTH_VOICE_OFF, false, directory, name);
+        assert(visible_text(lv_screen_active(), "运动中"));
+        memcpy(s_before, s_pixels, sizeof(s_before));
+        frame(now + 2800, HEALTH_VOICE_OFF, false, directory, NULL);
+        assert(region_changed(70, 87, 96, 42));
+        uint64_t phase_end = s_log.interval_until_ms;
+        assert(health_log_tick(&s_log, phase_end));
+        snprintf(name, sizeof(name), "%s-rest", names[i]);
+        frame(phase_end, HEALTH_VOICE_OFF, false, directory, name);
+        assert(visible_text(lv_screen_active(), "休息中"));
+        health_ui_set_mode(HEALTH_UI_HELP);
+        assert(tap(HEALTH_KEY_OK, phase_end + 100) == 0 && health_ui_mode() == page);
+        assert(health_log_tick(&s_log, now + 151201));
+        assert(s_log.interval_finished && !s_log.interval_on);
+        snprintf(name, sizeof(name), "%s-complete", names[i]);
+        frame(now + 151201, HEALTH_VOICE_OFF, false, directory, name);
+        assert(visible_text(lv_screen_active(), "训练完成"));
+        assert(s_model.history.count == 0 && s_log.saved.entry_count == 0);
+    }
+    lv_font_glyph_dsc_t missing = {0};
+    assert(!lv_font_get_glyph_dsc(&plank_zh_16, &missing, 0x9F98, 0) || missing.is_placeholder);
+    char out[320];
+    assert(health_activity_tool(&s_log, &s_model, "start_interval_plan",
+                                "{\"work_s\":30,\"rest_s\":10,\"rounds\":2}", 1000000, out, sizeof(out)));
+    health_ui_set_mode(HEALTH_UI_HOME);
+    frame(1000000, HEALTH_VOICE_READY, false, directory, "home-voice-plan");
+    assert(visible_text(lv_screen_active(), "语音跟练"));
+    assert(!visible_text(lv_screen_active(), "平板支撑"));
+    health_ui_set_mode(HEALTH_UI_JACKS);
+    frame(1001000, HEALTH_VOICE_READY, false, directory, "home-jacks-voice-active");
+    assert(visible_text(lv_screen_active(), "开合跳"));
+    assert(visible_text(lv_screen_active(), "语音跟练进行中"));
+    assert(tap(HEALTH_KEY_OK, 1001100) == HEALTH_SOUND_ERROR);
     assert(health_ui_mode() == HEALTH_UI_HOME && s_log.interval_on);
-    assert(s_model.state == PLANK_RUNNING);
-    assert(tap(HEALTH_KEY_OK, 120200) == PLANK_EFFECT_STOP && !s_log.interval_on);
+    assert(health_log_tick(&s_log, 1080000));
+    frame(1080000, HEALTH_VOICE_READY, false, directory, "home-voice-complete");
+    assert(tap(HEALTH_KEY_OK, 1080100) == 0 && !s_log.interval_finished);
+    frame(1080200, HEALTH_VOICE_READY, false, directory, "home-return-plank");
+    assert(visible_text(lv_screen_active(), "平板支撑"));
+    assert(s_model.state == PLANK_READY);
 }
 
 static void persistent_mute(const char *directory)
 {
     const health_ui_mode_t modes[] = {
-        HEALTH_UI_EVERYDAY, HEALTH_UI_GYM, HEALTH_UI_HOME, HEALTH_UI_HELP,
+        HEALTH_UI_EVERYDAY, HEALTH_UI_GYM, HEALTH_UI_HOME, HEALTH_UI_SQUAT,
+        HEALTH_UI_JACKS, HEALTH_UI_STRETCH, HEALTH_UI_HELP,
     };
     for (unsigned i = 0; i < sizeof(modes) / sizeof(modes[0]); i++) {
         health_ui_set_mode(modes[i]);
@@ -296,6 +379,13 @@ static void persistent_mute(const char *directory)
         memcpy(s_before, s_pixels, sizeof(s_before));
         health_ui_set_volume(0, now + 2100);
         frame(now + 4000, HEALTH_VOICE_READY, false, directory, NULL);
+        if (!region_changed(130, 52, 46, 25)) {
+            lv_mem_monitor_t memory;
+            lv_mem_monitor(&memory);
+            fprintf(stderr, "Mute not rendered on mode %u: visible=%d free=%zu largest=%zu\n",
+                    (unsigned)modes[i], visible_text(lv_screen_active(), "静音"),
+                    memory.free_size, memory.free_biggest_size);
+        }
         assert(region_changed(130, 52, 46, 25));
         memcpy(s_before, s_pixels, sizeof(s_before));
         frame(now + 6000, HEALTH_VOICE_READY, false, directory, NULL);
@@ -353,10 +443,11 @@ int main(int argc, char **argv)
 
     hold_mode(HEALTH_KEY_DOWN, HEALTH_UI_HOME, 10000);
     frame(11000, HEALTH_VOICE_READY, false, directory, "home");
+    assert(visible_text(lv_screen_active(), "平板支撑"));
     assert(lv_screen_active() == home);
     assert(tap(HEALTH_KEY_OK, 11100) == PLANK_EFFECT_PREP_1);
     frame(11101, HEALTH_VOICE_READY, false, directory, "home-preparing");
-    hold_mode(HEALTH_KEY_DOWN, HEALTH_UI_HELP, 11200);
+    health_ui_set_mode(HEALTH_UI_HELP);
     assert(s_model.state == PLANK_PREPARING);
     assert(tap(HEALTH_KEY_OK, 12300) == 0 && health_ui_mode() == HEALTH_UI_HOME);
     assert(s_model.state == PLANK_PREPARING);
@@ -398,8 +489,11 @@ int main(int argc, char **argv)
     assert(!region_changed(8, 250, 224, 32));
     help_navigation(directory);
     timers_through_help(directory);
+    activity_screens(directory);
     persistent_mute(directory);
-    puts("Health LVGL: PASS (real reducer, Help return, timer continuity, compact layout, voice/volume, persistent mute, glyphs, bounds, history, notice expiry)");
+    printf("UI fixed-pool headroom: minimum free=%zu, minimum largest block=%zu bytes\n",
+           s_min_free, s_min_block);
+    puts("Health LVGL: PASS (actual reducer, seven-page navigation, offline presets, ownership conflicts, voice plans, Help return, simultaneous gym timer, phases/completion, glyphs, bounds, persistent mute)");
     lv_deinit();
     return 0;
 }

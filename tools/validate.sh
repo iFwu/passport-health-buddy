@@ -30,7 +30,7 @@ run_static_checks() {
     "${test_dir}/test_ui_pixel_math"
     "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \
         tests/test_health_logic.c main/health_exercise.c main/health_log.c main/step_rx.c main/qjson.c \
-        main/b64_stream.c main/portal_form.c -o "${test_dir}/test_health_logic"
+        main/health_activity.c main/plank_core.c main/b64_stream.c main/portal_form.c -o "${test_dir}/test_health_logic"
     "${test_dir}/test_health_logic"
     "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \
         tests/test_step_trace_rx.c main/step_rx.c main/qjson.c main/b64_stream.c \
