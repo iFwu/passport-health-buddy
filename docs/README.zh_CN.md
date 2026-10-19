@@ -196,6 +196,7 @@ LICENSE                  仓库许可证
 ## 文档索引
 
 - [随身健康助手](health-companion.zh_CN.md)：目标产品形态、Step 实时语音方案与路线。
+- [开发计划](plan.zh_CN.md)：架构决策、StepFun 实测、排期与验收。
 - [平板支撑自由计时器](plank-trainer.md)：专用应用使用手册、记录语义与安装边界。
 - [固件入门中文小课](learning/README.md)：三分钟课程、即时反馈练习与术语参考。
 

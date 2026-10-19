@@ -1,0 +1,7 @@
+# EMULATOR ONLY. Never flash an image built with this file: GPIO21 drives the
+# backlight on real hardware, and a UART0 console would toggle it as TX.
+# Emulator overlay: route the primary console to UART0 so the browser and
+# headless emulators capture application logs; USB Serial JTAG stays secondary.
+CONFIG_ESP_CONSOLE_UART_DEFAULT=y
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=n
+CONFIG_ESP_CONSOLE_SECONDARY_USB_SERIAL_JTAG=y
