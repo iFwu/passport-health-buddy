@@ -7,23 +7,48 @@
 
 LV_FONT_DECLARE(plank_zh_16);
 
-static health_ui_mode_t s_mode = HEALTH_UI_MENU;
+static health_ui_mode_t s_mode = HEALTH_UI_EVERYDAY;
 static int s_menu;
 static lv_obj_t *s_screen;
 static lv_obj_t *s_plank;
 static lv_obj_t *s_title;
-static lv_obj_t *s_body;
-static lv_obj_t *s_status;
+static lv_obj_t *s_card;
+static lv_obj_t *s_big;
+static lv_obj_t *s_line1;
+static lv_obj_t *s_line2;
+static lv_obj_t *s_alert;
+static lv_obj_t *s_voice;
+static lv_obj_t *s_keys;
+static lv_obj_t *s_battery;
+static lv_obj_t *s_rows[3];
 static char s_portal_ssid[33];
 static char s_portal_pass[16];
 
-static lv_obj_t *add_label(lv_obj_t *parent, int y)
+static const char *k_modes[] = { "办公", "健身房", "居家" };
+
+static lv_obj_t *solid(lv_obj_t *parent, int x, int y, int w, int h, uint32_t color, int radius)
+{
+    lv_obj_t *obj = lv_obj_create(parent);
+    lv_obj_set_scrollbar_mode(obj, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_set_hidden(obj, false);
+    lv_obj_set_pos(obj, x, y);
+    lv_obj_set_size(obj, w, h);
+    lv_obj_set_style_radius(obj, radius, 0);
+    lv_obj_set_style_border_width(obj, 0, 0);
+    lv_obj_set_style_pad_all(obj, 0, 0);
+    lv_obj_set_style_bg_color(obj, lv_color_hex(color), 0);
+    lv_obj_set_style_bg_opa(obj, LV_OPA_COVER, 0);
+    return obj;
+}
+
+static lv_obj_t *centered_line(lv_obj_t *parent, int y, const lv_font_t *font, uint32_t color)
 {
     lv_obj_t *label = lv_label_create(parent);
-    lv_obj_set_width(label, 220);
-    lv_obj_set_style_text_font(label, &plank_zh_16, 0);
-    lv_obj_set_style_text_color(label, lv_color_white(), 0);
-    lv_label_set_long_mode(label, LV_LABEL_LONG_WRAP);
+    lv_label_set_text(label, "");
+    lv_obj_set_width(label, 200);
+    lv_obj_set_style_text_font(label, font, 0);
+    lv_obj_set_style_text_color(label, lv_color_hex(color), 0);
+    lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(label, LV_ALIGN_TOP_MID, 0, y);
     return label;
 }
@@ -32,11 +57,37 @@ void health_ui_create(lv_obj_t *plank_screen)
 {
     s_plank = plank_screen;
     s_screen = lv_obj_create(NULL);
-    lv_obj_set_style_bg_color(s_screen, lv_color_black(), 0);
-    s_title = add_label(s_screen, 28);
-    s_body = add_label(s_screen, 70);
-    s_status = add_label(s_screen, 250);
-    lv_scr_load(s_screen);
+    lv_obj_set_scrollbar_mode(s_screen, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_set_style_bg_color(s_screen, lv_color_hex(0xD7EBF8), 0);
+    lv_obj_set_style_bg_opa(s_screen, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(s_screen, 0, 0);
+    lv_obj_set_style_pad_all(s_screen, 0, 0);
+
+    lv_obj_t *header = solid(s_screen, 0, 0, 240, 44, 0x1689E8, 0);
+    s_title = centered_line(header, 12, &plank_zh_16, 0xFFFFFF);
+    s_battery = lv_label_create(header);
+    lv_label_set_text(s_battery, "--%");
+    lv_obj_set_style_text_font(s_battery, &plank_zh_16, 0);
+    lv_obj_set_style_text_color(s_battery, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_align(s_battery, LV_ALIGN_RIGHT_MID, -8, 0);
+
+    s_card = solid(s_screen, 12, 56, 216, 196, 0xFFFFFF, 12);
+    s_big = centered_line(s_card, 28, &lv_font_montserrat_32, 0x17202A);
+    s_line1 = centered_line(s_card, 84, &plank_zh_16, 0x17202A);
+    s_line2 = centered_line(s_card, 110, &plank_zh_16, 0x17202A);
+    s_alert = centered_line(s_card, 140, &plank_zh_16, 0xE43B2F);
+    s_voice = centered_line(s_card, 166, &plank_zh_16, 0x0872C9);
+
+    for (int i = 0; i < 3; i++) {
+        s_rows[i] = solid(s_screen, 12, 56 + i * 68, 216, 60, 0xFFFFFF, 12);
+        lv_obj_t *name = centered_line(s_rows[i], 20, &plank_zh_16, 0x17202A);
+        lv_label_set_text(name, k_modes[i]);
+    }
+
+    lv_obj_t *footer = solid(s_screen, 0, 268, 240, 52, 0x17202A, 0);
+    s_keys = centered_line(footer, 16, &plank_zh_16, 0xFFFFFF);
+
+    lv_screen_load(s_screen);
 }
 
 void health_ui_set_portal(const char *ssid, const char *password, const char *status)
@@ -55,8 +106,8 @@ health_ui_mode_t health_ui_mode(void)
 static void show(health_ui_mode_t mode)
 {
     s_mode = mode;
-    if (mode == HEALTH_UI_HOME && s_plank) lv_scr_load(s_plank);
-    else lv_scr_load(s_screen);
+    if (mode == HEALTH_UI_HOME && s_plank) lv_screen_load(s_plank);
+    else lv_screen_load(s_screen);
 }
 
 bool health_ui_key(bsp_btn_t button, bsp_btn_ev_t event, health_log_t *log, uint64_t now_ms)
@@ -106,54 +157,94 @@ static const char *voice_label(void)
     }
 }
 
+static void show_rows(bool on)
+{
+    for (int i = 0; i < 3; i++) lv_obj_set_hidden(s_rows[i], !on);
+    lv_obj_set_hidden(s_card, on);
+}
+
 void health_ui_refresh(const health_log_t *log, uint64_t now_ms, int battery, const char *status)
 {
     if (s_mode == HEALTH_UI_HOME) return;
-    char title[64], body[240];
-    const int battery_pct = battery >= 0 ? battery : -1;
+    if (battery < 0) lv_label_set_text(s_battery, "--%");
+    else lv_label_set_text_fmt(s_battery, "%d%%", battery);
+
+    char line1[48], line2[48], alert[32];
+    line1[0] = line2[0] = alert[0] = '\0';
+    const char *title = "健康";
+    const char *keys = "";
+    const char *big = "";
+
     if (s_mode == HEALTH_UI_PORTAL) {
-        snprintf(title, sizeof(title), "配网%s", battery_pct >= 0 ? "" : "");
-        snprintf(body, sizeof(body), "热点 %s\n密码 %s\n手机打开\n192.168.4.1\n%s",
-                 s_portal_ssid, s_portal_pass, status ? status : "");
+        title = "配网";
+        big = s_portal_pass[0] ? s_portal_pass : "----";
+        snprintf(line1, sizeof(line1), "热点 %s", s_portal_ssid);
+        snprintf(line2, sizeof(line2), "%s", status && status[0] ? status : "192.168.4.1");
+        keys = "手机打开网页";
+        show_rows(false);
     } else if (s_mode == HEALTH_UI_MENU) {
-        snprintf(title, sizeof(title), "随身健康助手");
-        snprintf(body, sizeof(body), "%s 办公\n%s 健身房\n%s 居家\n\n上/下选择  确定进入",
-                 s_menu == 0 ? ">" : " ", s_menu == 1 ? ">" : " ", s_menu == 2 ? ">" : " ");
+        title = "健康";
+        keys = "下 选择  确定 进入";
+        show_rows(true);
+        for (int i = 0; i < 3; i++) {
+            lv_obj_set_style_bg_color(s_rows[i], lv_color_hex(i == s_menu ? 0xFFD928 : 0xFFFFFF), 0);
+        }
     } else if (s_mode == HEALTH_UI_EVERYDAY) {
+        static char ml[16];
         const unsigned sit = (unsigned)((now_ms - log->last_stand_ms) / 60000);
-        snprintf(title, sizeof(title), "办公");
-        snprintf(body, sizeof(body), "喝水 %u ml\n距离起身 %u 分钟\n%s%s\n确定=我起来了  下=记一杯",
-                 (unsigned)log->saved.water_ml, sit,
-                 health_log_sitting_due(log, now_ms) ? "该起来走走\n" : "",
-                 health_log_water_due(log, now_ms) ? "该喝水了\n" : "");
+        title = "办公";
+        snprintf(ml, sizeof(ml), "%u", (unsigned)log->saved.water_ml);
+        big = ml;
+        snprintf(line1, sizeof(line1), "今天喝水");
+        snprintf(line2, sizeof(line2), "起身 %u 分钟", sit);
+        if (health_log_sitting_due(log, now_ms)) snprintf(alert, sizeof(alert), "该起身");
+        else if (health_log_water_due(log, now_ms)) snprintf(alert, sizeof(alert), "该喝水");
+        keys = health_log_undo_open(log, now_ms) ? "下 撤销" : "确定 起来  下 一杯";
+        show_rows(false);
     } else if (s_mode == HEALTH_UI_GYM) {
-        snprintf(title, sizeof(title), "健身房");
+        static char rest[16];
+        title = "健身房";
+        snprintf(rest, sizeof(rest), "%u", health_log_rest_left_s(log, now_ms));
+        big = rest;
         if (log->saved.set_count) {
             const health_set_t *set = &log->saved.sets[log->saved.set_count - 1];
-            snprintf(body, sizeof(body), "休息 %u 秒\n最近 %s\n%u.%u kg × %u\n已练 %u 组",
-                     health_log_rest_left_s(log, now_ms), set->name,
+            snprintf(line1, sizeof(line1), "最近 %s", set->name);
+            snprintf(line2, sizeof(line2), "%u.%u kg x %u",
                      (unsigned)(set->weight_x10 / 10), (unsigned)(set->weight_x10 % 10),
-                     (unsigned)set->reps, (unsigned)log->saved.set_count);
+                     (unsigned)set->reps);
         } else {
-            snprintf(body, sizeof(body), "休息 %u 秒\n按住上键说动作\n例如：卧推 60 公斤 8 个",
-                     health_log_rest_left_s(log, now_ms));
+            snprintf(line1, sizeof(line1), "休息 秒");
+            snprintf(line2, sizeof(line2), "按住上键说动作");
         }
+        keys = health_log_undo_open(log, now_ms) ? "下 撤销" : "确定 休息  上 说话";
+        show_rows(false);
     } else {
-        snprintf(title, sizeof(title), log->interval_on ? "跟练" : "居家");
+        title = log->interval_on ? "跟练" : "居家";
         if (log->interval_on) {
-            snprintf(body, sizeof(body), "第 %u / %u 轮\n%s\n剩余见倒计时",
-                     (unsigned)log->interval_round, (unsigned)log->interval_rounds,
-                     log->interval_work ? "运动" : "休息");
+            static char round[16];
+            snprintf(round, sizeof(round), "%u", (unsigned)log->interval_round);
+            big = round;
+            snprintf(line1, sizeof(line1), "第 %u 轮", (unsigned)log->interval_rounds);
+            snprintf(line2, sizeof(line2), "%s", log->interval_work ? "运动" : "休息");
         } else {
-            snprintf(body, sizeof(body), "平板支撑\n长按确定返回");
+            big = "GO";
+            snprintf(line1, sizeof(line1), "平板支撑");
+            snprintf(line2, sizeof(line2), "长按确定返回");
         }
+        keys = "长按确定 回菜单";
+        show_rows(false);
     }
+
     lv_label_set_text(s_title, title);
-    lv_label_set_text(s_body, body);
-    char voice[STEP_TEXT_MAX + 32];
-    char said[STEP_TEXT_MAX];
-    step_voice_text(said, sizeof(said));
-    snprintf(voice, sizeof(voice), "%s%s%s", voice_label(), said[0] ? "\n" : "", said);
-    lv_label_set_text(s_status, voice);
-    (void)battery_pct;
+    lv_label_set_text(s_big, big);
+    lv_label_set_text(s_line1, line1);
+    lv_label_set_text(s_line2, line2);
+    lv_label_set_text(s_alert, alert);
+    char heard[STEP_TEXT_MAX];
+    char voice[STEP_TEXT_MAX + 24];
+    step_voice_text(heard, sizeof(heard));
+    if (heard[0]) snprintf(voice, sizeof(voice), "%s %s", voice_label(), heard);
+    else snprintf(voice, sizeof(voice), "%s", voice_label());
+    lv_label_set_text(s_voice, voice);
+    lv_label_set_text(s_keys, keys);
 }

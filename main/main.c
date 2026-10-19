@@ -20,6 +20,8 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
+#include "lwip/netdb.h"
+#include "lwip/sockets.h"
 
 #include <stdatomic.h>
 #include <stdio.h>
@@ -41,11 +43,30 @@ static plank_key_t as_plank_key(bsp_btn_t button)
     return PLANK_OK;
 }
 
+static bool stepfun_resolved(void)
+{
+    const struct addrinfo hints = {
+        .ai_family = AF_INET,
+        .ai_socktype = SOCK_STREAM,
+    };
+    for (int attempt = 0; attempt < 8; attempt++) {
+        struct addrinfo *res = NULL;
+        if (getaddrinfo("api.stepfun.com", "443", &hints, &res) == 0 && res) {
+            freeaddrinfo(res);
+            return true;
+        }
+        vTaskDelay(pdMS_TO_TICKS(400));
+    }
+    return false;
+}
+
 static void net_task(void *arg)
 {
     (void)arg;
     if (health_wifi_connect(s_ssid, s_pass, 20000) == ESP_OK) {
         health_clock_start();
+        if (!stepfun_resolved()) ESP_LOGW(TAG, "StepFun 域名暂时解析失败，仍会重试连接");
+        else ESP_LOGI(TAG, "StepFun 域名已解析");
         if (step_voice_start(s_key) != ESP_OK) ESP_LOGE(TAG, "语音启动失败");
     } else {
         ESP_LOGW(TAG, "Wi-Fi 连接失败，计时和手动记录仍可用");

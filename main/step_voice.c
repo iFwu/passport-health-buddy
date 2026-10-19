@@ -30,7 +30,7 @@ static char s_uri[160];
 static const char SESSION[] =
     "{\"type\":\"session.update\",\"session\":{"
     "\"modalities\":[\"text\",\"audio\"],"
-    "\"instructions\":\"你是随身健康助手，回答简短。用户报告喝水、训练或休息时必须调用对应工具，不要把工具名念出来。\","
+    "\"instructions\":\"你是随身健康助手，回答简短。喝水、训练或休息必须调用工具，不要把工具名念出来。一杯水记 250 毫升。记一组要给出动作、重量和次数。\","
     "\"voice\":\"qingchunshaonv\","
     "\"input_audio_format\":\"pcm16\",\"output_audio_format\":\"pcm16\","
     "\"tools\":["
@@ -183,6 +183,7 @@ static void uplink(void *arg)
                 send_text("{\"type\":\"response.create\"}");
                 atomic_store(&s_state, STEP_THINKING);
                 atomic_store(&s_owns, false);
+                ESP_LOGI(TAG, "松手，已提交语音");
             }
             was_held = false;
             filled = 0;
@@ -195,6 +196,7 @@ static void uplink(void *arg)
             atomic_store(&s_state, STEP_RECORDING);
             atomic_store(&s_owns, true);
             was_held = true;
+            ESP_LOGI(TAG, "按住，开始听");
         }
         if (bsp_audio_read(pcm + filled, FRAME_BYTES - filled) != ESP_OK) {
             vTaskDelay(pdMS_TO_TICKS(20));
@@ -247,9 +249,9 @@ esp_err_t step_voice_start(const char *api_key)
     const esp_websocket_client_config_t cfg = {
         .uri = s_uri,
         .headers = s_auth,
-        .buffer_size = 4096,
-        .task_stack = 8192,
-        .network_timeout_ms = 10000,
+        .buffer_size = 8192,
+        .task_stack = 10240,
+        .network_timeout_ms = 15000,
         .reconnect_timeout_ms = 4000,
         .crt_bundle_attach = esp_crt_bundle_attach,
     };
