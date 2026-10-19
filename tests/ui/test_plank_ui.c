@@ -8,8 +8,9 @@
 static uint16_t s_buffer[240 * 320];
 static unsigned char s_pixels[240 * 320 * 3];
 static unsigned s_flushes;
-static lv_area_t s_labels[16];
+static lv_area_t s_labels[32];
 static unsigned s_label_count;
+static unsigned s_footer_labels;
 
 static void flush(lv_display_t *display, const lv_area_t *area, uint8_t *pixels)
 {
@@ -30,6 +31,7 @@ static void flush(lv_display_t *display, const lv_area_t *area, uint8_t *pixels)
 static void check_labels(lv_obj_t *obj)
 {
     if (lv_obj_has_flag(obj, LV_OBJ_FLAG_HIDDEN)) return;
+    assert(lv_obj_get_style_shadow_width(obj, 0) == 0);
     bool is_label = lv_obj_check_type(obj, &lv_label_class);
     if (is_label || lv_obj_has_flag(obj, LV_OBJ_FLAG_USER_1)) {
         lv_area_t box;
@@ -44,6 +46,13 @@ static void check_labels(lv_obj_t *obj)
                     (long)size.x, (long)lv_obj_get_width(obj));
             assert(false);
         }
+        if (is_label && *text) {
+            assert(size.y <= lv_obj_get_height(obj));
+            if (box.y1 >= 292) {
+                assert(strchr(text, '\n') == NULL);
+                s_footer_labels++;
+            }
+        }
         if (*text) {
             for (unsigned i = 0; i < s_label_count; i++) {
                 const lv_area_t *other = &s_labels[i];
@@ -55,7 +64,7 @@ static void check_labels(lv_obj_t *obj)
                 assert(box.x1 > other->x2 || box.x2 < other->x1 ||
                        box.y1 > other->y2 || box.y2 < other->y1);
             }
-            assert(s_label_count < 16);
+            assert(s_label_count < sizeof(s_labels) / sizeof(s_labels[0]));
             s_labels[s_label_count++] = box;
         }
     }
@@ -66,10 +75,13 @@ static void check_labels(lv_obj_t *obj)
 static void capture(plank_model_t *model, const char *directory, const char *name,
                     uint64_t now, bool audio_ok, bool buttons_ok)
 {
-    plank_ui_refresh(model, now, -1, audio_ok, buttons_ok);
+    plank_ui_refresh(model, now, -1, audio_ok, buttons_ok,
+                      "语音就绪", 0xD9E7EC, 50, false);
     lv_obj_update_layout(lv_screen_active());
     s_label_count = 0;
+    s_footer_labels = 0;
     check_labels(lv_screen_active());
+    assert(s_footer_labels == 1);
     unsigned before = s_flushes;
     lv_obj_invalidate(lv_screen_active());
     lv_tick_inc(40);

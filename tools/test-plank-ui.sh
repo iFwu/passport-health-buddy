@@ -10,6 +10,7 @@ cmake -S tests/ui -B build/plank-ui -G Ninja
 cmake --build build/plank-ui --parallel 4
 mkdir -p build/plank-ui/previews
 build/plank-ui/test_plank_ui build/plank-ui/previews
+build/plank-ui/test_health_ui build/plank-ui/previews
 build/plank-ui/test_plank_audio build/plank-ui/previews
 if command -v sips >/dev/null 2>&1; then
     for preview in build/plank-ui/previews/*.ppm; do

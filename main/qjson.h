@@ -23,7 +23,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define QJ_MAX_DEPTH 8   // 最大容器嵌套层数（含根对象）
+#define QJ_MAX_DEPTH 12  // 最大容器嵌套层数（含根对象；session.updated 含 enum 达 9 层）
 #define QJ_KEY_MAX   24  // 每层“当前键名”缓冲（含 NUL）
 #define QJ_PRIM_MAX  24  // 原始值缓冲（含 NUL）
 #define QJ_CHUNK_MAX 96  // 字符串值分片的解码输出缓冲；满了就先回调一次

@@ -4,7 +4,7 @@
 
 # Development Plan
 
-Goal: at the October 23 final, hold UP on the real device and say "I just drank a cup of water"; the counter increments and StepAudio 3 reads out today's total. Sitting / hydration reminders and gym set logging are also demoed.
+Goal: at the October 23 final, long-press OK on the device and say "I just drank a cup of water" after the cue; hydration increases by 250 ml and StepAudio 3 reads the total. Demonstrate automatic activity/hydration reminders and gym set logging as well.
 
 ## Architecture decisions
 
@@ -13,9 +13,9 @@ Goal: at the October 23 final, hold UP on the real device and say "I just drank 
 | Connectivity | The device connects to `api.stepfun.com` over a TLS WebSocket, no relay | Works on any network; `api.stepfun.com` honours TLS Max Fragment Length, so the C3 memory plan holds |
 | Base | Merge provisioning, Wi-Fi, TLS tuning, and the voice pipeline from [Qoder-Passport](https://github.com/kunlun322/Qoder-Passport) (MIT) | Also derived from `FoloToy/ai-passport` on ESP-IDF 5.5.3; already runs 24 kHz realtime voice downlink on the same C3 |
 | Model | `stepaudio-3-realtime-preview`, fallback `step-audio-2` | See measurements below; if the preview is retired only the model name changes |
-| Interaction | Hold UP to talk, `commit` on release | No server VAD, no wake word: lower power, no false triggers |
-| Tool-call confirmation | Write NVS immediately, return the result, 5-second on-screen undo | StepAudio 3 waits for the tool result before speaking; a key confirmation would stall the voice |
-| Secrets | Entered on the provisioning page, stored only in NVS | No key in firmware or the repository |
+| Interaction | Short UP/DOWN adjusts volume, long UP/DOWN pages; short OK acts, long OK talks, release sends `commit` | Consistent across modes, no double-click; holds never also tap |
+| Tool-call confirmation | Commit persistent records to NVS before returning storage results; explicitly report failures while keeping RAM data | No second key confirmation or physical undo key; corrections and full-capacity additions both save |
+| Secrets | Provisioning-page NVS, or optional untracked `sdkconfig.local` embedded in firmware | Never log keys or publish credential-bearing images |
 | Rejected | XiaoZhi framework, laptop relay | XiaoZhi needs IDF 6, C++, Opus, and a chatbot UI shell; a relay adds a machine |
 
 ## Measurements (2026-10-19, device-style calls from a laptop)
@@ -61,4 +61,10 @@ If time runs short, cut in order: evening report → interval workouts → gym q
 | Preview model retired before the final | Configurable model name; switch to `step-audio-2` |
 | Not enough RAM on device (TLS + audio + LVGL) | Reuse the Qoder-Passport measured configuration; track minimum free heap during sessions |
 | Unreliable venue Wi-Fi | Phone hotspot on 2.4 GHz; timers and manual logs work offline |
-| Poor recognition in noise | Push-to-talk close to the device; screen shows the recognised text and the result can be undone |
+| Poor recognition in noise | Speak close to the device after its cue, release to send; show execution results and voice status, not arbitrary transcripts; use spoken corrections when needed |
+
+The [product operating guide](health-companion.md) defines current controls and cues. The old standalone plank-timer manual describes historical firmware, not Health Buddy's button mapping.
+
+## Device acceptance boundary
+
+Application ELF `acc633936ab9d52090669457874068dcc88078b64b40cc7a243a993bc1dcb4f9` was written only at `0x10000` and verified. Physical controls, hydration speech, cues, and hydration/mute persistence across power-off were confirmed on device. The spoken bench-press set of 60 kg for 8 reps did not add a record; interval plans remain unverified on hardware. That serial trace showed input submission, final ASR, an audio response and `response.done`, but no logged tool-call event; it does not establish whether recognition or prompt behavior failed. Further diagnosis uses the new per-utterance trace. Old-image acceptance does not certify all functions in a new image.

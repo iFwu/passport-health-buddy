@@ -57,21 +57,45 @@ bool health_cfg_load_log(health_persist_t *log)
     nvs_handle_t handle;
     if (nvs_open(NS, NVS_READONLY, &handle) != ESP_OK) return false;
     size_t len = sizeof(*log);
-    esp_err_t err = nvs_get_blob(handle, "log_v1", log, &len);
+    esp_err_t err = nvs_get_blob(handle, "log_v2", log, &len);
     nvs_close(handle);
-    if (err != ESP_OK || len != sizeof(*log) || log->set_count > HEALTH_SET_CAP) {
+    if (err != ESP_OK || len != sizeof(*log) || log->entry_count > HEALTH_ENTRY_CAP) {
         memset(log, 0, sizeof(*log));
         return false;
     }
     return true;
 }
 
-esp_err_t health_cfg_save_log(const health_persist_t *log)
+esp_err_t health_cfg_save_pending(const health_log_t *log, uint32_t *saved_revision)
 {
+    if (*saved_revision == log->revision) return ESP_OK;
     nvs_handle_t handle;
     esp_err_t err = nvs_open(NS, NVS_READWRITE, &handle);
     if (err != ESP_OK) return err;
-    err = nvs_set_blob(handle, "log_v1", log, sizeof(*log));
+    err = nvs_set_blob(handle, "log_v2", &log->saved, sizeof(log->saved));
+    if (err == ESP_OK) err = nvs_commit(handle);
+    nvs_close(handle);
+    if (err == ESP_OK) *saved_revision = log->revision;
+    return err;
+}
+
+unsigned health_cfg_load_volume(void)
+{
+    nvs_handle_t handle;
+    uint8_t value = 80;
+    if (nvs_open(NS, NVS_READONLY, &handle) != ESP_OK) return value;
+    if (nvs_get_u8(handle, "volume", &value) != ESP_OK || value > 100) value = 80;
+    nvs_close(handle);
+    return value;
+}
+
+esp_err_t health_cfg_save_volume(unsigned percent)
+{
+    if (percent > 100) return ESP_ERR_INVALID_ARG;
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open(NS, NVS_READWRITE, &handle);
+    if (err != ESP_OK) return err;
+    err = nvs_set_u8(handle, "volume", (uint8_t)percent);
     if (err == ESP_OK) err = nvs_commit(handle);
     nvs_close(handle);
     return err;

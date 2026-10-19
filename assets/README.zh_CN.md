@@ -29,6 +29,7 @@
 | [`images/readme-hardware-specs.png`](images/readme-hardware-specs.png) | 2172 × 724，PNG RGBA | 保留为可选技术参考图，不再用于首页主视觉。于 2026-09-17 使用内置图像生成工具为本仓库生成；已根据文档中的硬件能力契约核对图中的六项标签与参数。 |
 | [`images/logo-wordmark.png`](images/logo-wordmark.png) | 1648 × 336，PNG RGBA | 从仓库原始 `images/logo.png` 中精确裁切并去除背景的黑色字标；用于中英文项目 README 的浅色主题。 |
 | [`images/logo-wordmark-dark.png`](images/logo-wordmark-dark.png) | 1648 × 336，PNG RGBA | 提取字标的白色版本；README 使用 `<picture>` 在 GitHub 深色主题下显示。 |
+| [`images/health-modes.png`](images/health-modes.png) | 720 × 320，PNG | `tests/ui/test_health_ui.c` 使用真实 LVGL 渲染办公／健身／居家三页，以 `magick build/plank-ui/previews/{office,gym,home}.png +append assets/images/health-modes.png` 拼接。应用自有界面，按仓库许可证分发；用于 README 和产品指南，不是真机照片。 |
 
 - 使用描述性命名，并记录尺寸、像素格式、转换步骤与目标路径。
 - 优先采用适合 240 × 320 RGB565 显示的格式，并纳入 Flash 与内部 RAM 考量。
@@ -38,6 +39,8 @@
 ## 音乐与音效（music）
 
 可复用的音乐与音效源码放在 `music/`。
+
+健康助手音效由 `main/plank_audio.c` 原创程序合成，遵循仓库许可证，不嵌入录音文件。`bash tools/test-plank-ui.sh` 用同一个合成器将 16 kHz、16-bit 单声道 WAV 导出到被忽略的 `build/plank-ui/previews/`；无需下载音频，也无需运行时缓冲整段文件。
 
 - 记录来源、许可、采样率、位深、声道、转换命令与目标路径。
 - 与当前 BSP 音频路径匹配时优先采用 16 kHz、16 位单声道 PCM。

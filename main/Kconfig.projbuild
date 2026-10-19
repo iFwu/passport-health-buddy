@@ -26,4 +26,12 @@ menu "Health Buddy"
         string "StepFun realtime model"
         default "stepaudio-3-realtime-preview"
 
+    config HEALTH_VOICE_TRACE_TEXT
+        bool "Include recognized speech and model/tool content in serial traces"
+        default n
+        help
+            Diagnostic use only. Serial logs may contain private conversation
+            and workout content. IDs, status and counters remain available
+            without this option. Never publish content-bearing trace files.
+
 endmenu

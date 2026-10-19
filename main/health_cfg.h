@@ -16,4 +16,6 @@ bool health_cfg_load_net(char *ssid, size_t ssid_cap, char *pass, size_t pass_ca
                          char *key, size_t key_cap);
 esp_err_t health_cfg_save_net(const char *ssid, const char *pass, const char *key);
 bool health_cfg_load_log(health_persist_t *log);
-esp_err_t health_cfg_save_log(const health_persist_t *log);
+esp_err_t health_cfg_save_pending(const health_log_t *log, uint32_t *saved_revision);
+unsigned health_cfg_load_volume(void);
+esp_err_t health_cfg_save_volume(unsigned percent);

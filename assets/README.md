@@ -27,6 +27,7 @@ Store reusable source images and generated display assets in `images/`.
 | [`images/readme-hardware-specs.png`](images/readme-hardware-specs.png) | 2172 × 724, PNG RGBA | Optional technical infographic retained as a reference asset; it is no longer used as the homepage hero. Generated for this repository with the built-in image generation tool on 2026-09-17; the six labels and values were checked against the documented hardware contract. |
 | [`images/logo-wordmark.png`](images/logo-wordmark.png) | 1648 × 336, PNG RGBA | Transparent black wordmark extracted from the repository's original `images/logo.png`; embedded in both project README files for light backgrounds. |
 | [`images/logo-wordmark-dark.png`](images/logo-wordmark-dark.png) | 1648 × 336, PNG RGBA | White version of the extracted wordmark, used by the README `<picture>` element when GitHub is in dark mode. |
+| [`images/health-modes.png`](images/health-modes.png) | 720 × 320, PNG | Office/Gym/Home frames rendered by `tests/ui/test_health_ui.c` against real LVGL, assembled with `magick build/plank-ui/previews/{office,gym,home}.png +append assets/images/health-modes.png`. Application-owned UI under the repository license; embedded in the README and product guide, not device photographs. |
 
 - Use descriptive names and document dimensions, pixel format, conversion steps, and destination.
 - Prefer formats suitable for the 240 × 320 RGB565 display and account for Flash and internal RAM.
@@ -36,6 +37,8 @@ Store reusable source images and generated display assets in `images/`.
 ## Music and sound effects
 
 Store reusable music and sound-effect sources in `music/`.
+
+Health Buddy cues are original procedural synthesis in `main/plank_audio.c`, under the repository license, rather than embedded recordings. `bash tools/test-plank-ui.sh` exports 16 kHz, 16-bit mono WAVs from that same renderer into ignored `build/plank-ui/previews/`; no downloaded audio or runtime full-file buffers are required.
 
 - Document the source, license, sample rate, bit depth, channels, conversion command, and destination.
 - Prefer 16 kHz, 16-bit mono PCM when it matches the current BSP audio path.

@@ -120,6 +120,23 @@ firmware path. For example:
    or postpones testing, no device is available, or access is unavailable,
    report `Device tests: NOT RUN` and list the pending checks in `Unverified`.
 
+### Standing authorization
+
+The user may grant a standing authorization such as "flash by default when
+done". It replaces step 3's per-build question only for this scope:
+
+- the same confirmed device and port;
+- the application image from a build that passed the complete gate, written
+  only to the factory application offset (`0x10000` with the default table);
+- partition table, NVS, Recovery and other partitions left untouched.
+
+Under it, flash right after the gate passes, then report the image hash, the
+write verification and startup observation. Merged-image writes at `0x0`,
+partition-table changes, erases, a different device, or firmware that has not
+passed the gate still require explicit approval for that flash. The standing
+authorization ends when the user withdraws it or the session ends, and it never
+covers commits, pushes or publishing.
+
 For documentation-only or other tasks that do not change firmware, explain
 that on-device testing is not applicable; do not flash unrelated firmware just
 to satisfy this workflow. This test invitation does not authorize commits,

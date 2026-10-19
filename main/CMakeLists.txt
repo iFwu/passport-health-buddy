@@ -13,13 +13,17 @@ idf_component_register(
          "audio_dsp.c"
          "portal_form.c"
          "tls_mfl.c"
+         "health_exercise.c"
          "health_log.c"
          "health_cfg.c"
          "health_wifi.c"
          "health_portal.c"
          "health_ui.c"
+         "health_input.c"
          "step_rx.c"
          "step_voice.c"
+         "step_trace.c"
+         "voice_trace.c"
     INCLUDE_DIRS "."
     REQUIRES bsp esp_timer nvs_flash
     PRIV_REQUIRES esp_wifi esp_netif esp_event esp_http_client esp_http_server

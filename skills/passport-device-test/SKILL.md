@@ -29,7 +29,8 @@ acceptance checklist, not every peripheral test for every change.
    target/layout evidence; do not assume any `.bin` is a merged image.
 4. Confirm the specific port, firmware, intended write range/data impact, and
    consent for this flash before writing. Existing explicit consent covering
-   those facts need not be asked again. A build request, earlier-version
+   those facts need not be asked again, including a standing application-only
+   authorization as defined in the AI guide. A build request, earlier-version
    approval, connected device, or publishing approval alone is insufficient.
 
 ## Flash only the intended data

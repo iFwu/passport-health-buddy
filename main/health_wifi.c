@@ -17,6 +17,8 @@ static const char *TAG = "health_wifi";
 static EventGroupHandle_t s_events;
 static esp_netif_t *s_sta;
 static bool s_connected;
+static bool s_auto_reconnect;
+static bool s_connecting;
 
 #define GOT_IP BIT0
 #define FAILED BIT1
@@ -28,6 +30,9 @@ static void on_event(void *arg, esp_event_base_t base, int32_t id, void *data)
     if (base == WIFI_EVENT && id == WIFI_EVENT_STA_DISCONNECTED) {
         s_connected = false;
         xEventGroupSetBits(s_events, FAILED);
+        if (s_auto_reconnect && !s_connecting) {
+            esp_wifi_connect();
+        }
     } else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
         s_connected = true;
         if (s_sta) esp_netif_set_default_netif(s_sta);
@@ -68,19 +73,29 @@ esp_err_t health_wifi_connect(const char *ssid, const char *pass, int timeout_ms
     esp_err_t err = esp_wifi_set_config(WIFI_IF_STA, &sta);
     if (err != ESP_OK) return err;
     ESP_LOGI(TAG, "连接 Wi-Fi，名称长度 %u", (unsigned)strlen(ssid));
+    s_auto_reconnect = true;
+    s_connecting = true;
     for (int attempt = 0; attempt < 3; attempt++) {
         xEventGroupClearBits(s_events, GOT_IP | FAILED);
         err = esp_wifi_connect();
-        if (err != ESP_OK) return err;
+        if (err != ESP_OK) {
+            s_connecting = false;
+            return err;
+        }
         const EventBits_t bits = xEventGroupWaitBits(
             s_events, GOT_IP | FAILED, pdTRUE, pdFALSE, pdMS_TO_TICKS(timeout_ms / 3));
-        if (bits & GOT_IP) return ESP_OK;
+        if (bits & GOT_IP) {
+            s_connecting = false;
+            return ESP_OK;
+        }
     }
+    s_connecting = false;
     return ESP_FAIL;
 }
 
 esp_err_t health_wifi_start_ap(const char *ssid, const char *pass)
 {
+    s_auto_reconnect = false;
     wifi_config_t ap = {0};
     strlcpy((char *)ap.ap.ssid, ssid, sizeof(ap.ap.ssid));
     ap.ap.ssid_len = strlen(ssid);

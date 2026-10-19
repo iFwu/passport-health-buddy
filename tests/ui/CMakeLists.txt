@@ -12,3 +12,9 @@ target_include_directories(test_plank_ui PRIVATE ../../main)
 target_link_libraries(test_plank_ui PRIVATE lvgl::lvgl)
 add_executable(test_plank_audio ../test_plank_audio.c ../../main/plank_audio.c ../../main/plank_core.c)
 target_include_directories(test_plank_audio PRIVATE ../../main)
+add_executable(test_health_ui test_health_ui.c ../../main/health_ui.c
+    ../../main/health_input.c ../../main/health_log.c ../../main/health_exercise.c
+    ../../main/plank_ui.c ../../main/plank_core.c ../../main/plank_digits.c
+    ../../main/ui_pixel.c ../../assets/fonts/plank_zh_16.c)
+target_include_directories(test_health_ui PRIVATE ../../main)
+target_link_libraries(test_health_ui PRIVATE lvgl::lvgl)

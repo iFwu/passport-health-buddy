@@ -67,8 +67,10 @@ Do not create a progress-document framework for a small edit.
 
 After a completed firmware implementation, proactively offer device testing
 using `docs/development/ai-guide.md`. A build or connected USB device does not
-authorize flashing. Stop for the user's decision if the remaining work requires
-new authority; do not turn that pause into an automatic release.
+authorize flashing; a standing application-only authorization from the user
+does, within the limits that guide defines. Stop for the user's decision if the
+remaining work requires new authority; do not turn that pause into an
+automatic release.
 
 Report `Build`, `Host tests`, `Device tests`, and `Unverified` separately.
 Documentation-only work does not need unrelated firmware flashed to a device.

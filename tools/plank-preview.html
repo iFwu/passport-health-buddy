@@ -2,11 +2,16 @@
 <html lang="zh-CN">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>PLANK 预览</title>
+<title>Health Buddy 固件预览</title>
 <style>
 *{box-sizing:border-box}body{margin:0;background:#f3f5f7;color:#1c252a;font-family:system-ui,sans-serif}main{max-width:1040px;margin:auto;padding:24px}h1{font-size:24px;margin:0 0 20px}h2{font-size:17px;margin:28px 0 12px}.screens{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}figure{margin:0}figure img{width:240px;height:320px;display:block;image-rendering:pixelated}figcaption{font-size:14px;padding:8px 0}.audio{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px}audio{width:100%}label{display:block;font-size:14px;margin-bottom:6px}
 </style>
-<main><h1>PLANK</h1><div class="screens">
+<main><h1>Health Buddy：实际 LVGL 渲染与固件音效</h1><p>桌面渲染，非真机截图。音频由固件的定点合成器导出；电脑播放不代表设备声压。上下短按调音量、长按翻页；确认短按执行、长按说话。</p><div class="screens">
+<figure><img src="office.png" alt="办公"><figcaption>办公：确认记水</figcaption></figure>
+<figure><img src="gym.png" alt="健身"><figcaption>健身：确认休息</figcaption></figure>
+<figure><img src="home.png" alt="居家"><figcaption>居家：确认开始</figcaption></figure>
+<figure><img src="help.png" alt="按键帮助"><figcaption>长按上下翻到 ?，确认返回</figcaption></figure>
+<figure><img src="home-volume-recording.png" alt="居家音量和录音反馈"><figcaption>全局音量与语音反馈</figcaption></figure>
 <figure><img src="running-under-minute.png" alt="59.99 秒"><figcaption>59.99 秒</figcaption></figure>
 <figure><img src="running-over-minute.png" alt="1 分钟"><figcaption>1 分钟</figcaption></figure>
 <figure><img src="running-narrow-digits.png" alt="11.11 秒"><figcaption>11.11 秒</figcaption></figure>
@@ -21,5 +26,13 @@
 <div><label for="thirty">30 秒</label><audio id="thirty" controls preload="none" src="thirty.wav"></audio></div>
 <div><label for="minute">整分钟</label><audio id="minute" controls preload="none" src="minute.wav"></audio></div>
 <div><label for="stop">结束</label><audio id="stop" controls preload="none" src="stop.wav"></audio></div>
+<div><label for="relax">转入休息</label><audio id="relax" controls preload="none" src="relax.wav"></audio></div>
+<div><label for="finish">全部完成</label><audio id="finish" controls preload="none" src="finish.wav"></audio></div>
+<div><label for="remind">活动 / 喝水提醒</label><audio id="remind" controls preload="none" src="remind.wav"></audio></div>
+<div><label for="ok">已记录</label><audio id="ok" controls preload="none" src="ok.wav"></audio></div>
+<div><label for="vol">音量反馈</label><audio id="vol" controls preload="none" src="vol.wav"></audio></div>
+<div><label for="listen">开始听</label><audio id="listen" controls preload="none" src="listen.wav"></audio></div>
+<div><label for="sent">已发送</label><audio id="sent" controls preload="none" src="sent.wav"></audio></div>
+<div><label for="error">失败</label><audio id="error" controls preload="none" src="error.wav"></audio></div>
 </div></main>
 </html>

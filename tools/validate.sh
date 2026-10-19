@@ -29,9 +29,34 @@ run_static_checks() {
         -o "${test_dir}/test_ui_pixel_math"
     "${test_dir}/test_ui_pixel_math"
     "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \
-        tests/test_health_logic.c main/health_log.c main/step_rx.c main/qjson.c \
+        tests/test_health_logic.c main/health_exercise.c main/health_log.c main/step_rx.c main/qjson.c \
         main/b64_stream.c main/portal_form.c -o "${test_dir}/test_health_logic"
     "${test_dir}/test_health_logic"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \
+        tests/test_step_trace_rx.c main/step_rx.c main/qjson.c main/b64_stream.c \
+        -o "${test_dir}/test_step_trace_rx"
+    "${test_dir}/test_step_trace_rx"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \
+        tests/test_voice_trace.c main/voice_trace.c -o "${test_dir}/test_voice_trace"
+    "${test_dir}/test_voice_trace"
+    "${test_dir}/test_voice_trace" --json-lines | python3 -c \
+        'import json,sys; pairs=[json.loads(line) for line in sys.stdin]; assert pairs; assert all(p["actual"] == p["expected"] for p in pairs); print("Trace JSON consumer: PASS")'
+    PYTHONDONTWRITEBYTECODE=1 python3 tests/test_voice_trace_tool.py
+    for trace_text in 0 1; do
+        "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -DTEST_TRACE_TEXT="${trace_text}" \
+            -Itests/trace_stubs -Imain tests/test_step_trace.c main/step_trace.c \
+            main/voice_trace.c main/step_rx.c main/qjson.c main/b64_stream.c \
+            -o "${test_dir}/test_step_trace_${trace_text}"
+        "${test_dir}/test_step_trace_${trace_text}" --json-lines | python3 -c \
+            'import json,sys; rows=[json.loads(line) for line in sys.stdin]; assert rows; print("Runtime trace JSON: PASS")'
+    done
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \
+        tests/test_health_input.c main/health_input.c -o "${test_dir}/test_health_input"
+    "${test_dir}/test_health_input"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain -Itests/stubs \
+        tests/test_health_cfg.c main/health_cfg.c main/health_log.c main/health_exercise.c \
+        -o "${test_dir}/test_health_cfg"
+    "${test_dir}/test_health_cfg"
     "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \
         tests/test_plank_core.c main/plank_core.c -o "${test_dir}/test_plank_core"
     "${test_dir}/test_plank_core"

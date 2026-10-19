@@ -5,68 +5,111 @@
 #include <inttypes.h>
 LV_FONT_DECLARE(plank_zh_16);
 
-static lv_obj_t *s_time, *s_dot, *s_state, *s_detail, *s_keys_label, *s_battery, *s_sound;
-static lv_obj_t *s_minute_unit;
+static lv_obj_t *s_time, *s_dot, *s_state, *s_detail, *s_keys_label, *s_battery;
+static lv_obj_t *s_minute_unit, *s_voice_bar, *s_voice, *s_volume_box, *s_volume;
+static lv_obj_t *s_mute;
 static plank_digits_t s_seconds, s_fraction, s_minutes, s_countdown;
 
 static lv_obj_t *label(lv_obj_t *parent, int y, const lv_font_t *font)
 {
-    lv_obj_t *obj = ui_pixel_label(parent, "", font, UI_INK);
+    lv_obj_t *obj = lv_label_create(parent);
+    lv_label_set_text(obj, "");
+    lv_obj_set_style_text_font(obj, font, 0);
+    lv_obj_set_style_text_color(obj, lv_color_hex(UI_INK), 0);
     lv_obj_set_width(obj, 208);
     lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(obj, LV_ALIGN_TOP_MID, 0, y);
+    lv_label_set_long_mode(obj, LV_LABEL_LONG_CLIP);
+    return obj;
+}
+
+static lv_obj_t *box(lv_obj_t *parent, int x, int y, int w, int h,
+                      uint32_t color, int radius, int border)
+{
+    lv_obj_t *obj = lv_obj_create(parent);
+    lv_obj_remove_flag(obj, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_pos(obj, x, y);
+    lv_obj_set_size(obj, w, h);
+    lv_obj_set_style_bg_color(obj, lv_color_hex(color), 0);
+    lv_obj_set_style_bg_opa(obj, LV_OPA_COVER, 0);
+    lv_obj_set_style_radius(obj, radius, 0);
+    lv_obj_set_style_border_width(obj, border, 0);
+    lv_obj_set_style_border_color(obj, lv_color_hex(UI_INK), 0);
+    lv_obj_set_style_pad_all(obj, 0, 0);
+    lv_obj_set_style_shadow_width(obj, 0, 0);
     return obj;
 }
 
 void plank_ui_create(void)
 {
-    lv_obj_t *screen = ui_pixel_screen_create("PLANK");
-    s_battery = ui_pixel_label(screen, "--%", &plank_zh_16, 0xFFFFFF);
-    lv_obj_set_pos(s_battery, 173, 30);
-    lv_obj_set_size(s_battery, 63, 20);
+    lv_obj_t *screen = lv_obj_create(NULL);
+    lv_obj_remove_flag(screen, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_style_bg_color(screen, lv_color_hex(UI_SKY), 0);
+    lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(screen, 0, 0);
+    lv_obj_set_style_pad_all(screen, 0, 0);
+    const char *titles[] = { "办公", "健身", "居家", "?" };
+    for (unsigned i = 0; i < 4; i++) {
+        int width = i == 3 ? 38 : 56;
+        lv_obj_t *tab = box(screen, 8 + 62 * (int)i, 6, width, 32,
+                            i == 2 ? UI_YELLOW : UI_PAPER, 8, 2);
+        lv_obj_t *name = label(tab, 6, &plank_zh_16);
+        lv_obj_set_width(name, width - 4);
+        lv_label_set_text(name, titles[i]);
+    }
+    box(screen, 8, 44, 224, 200, UI_PAPER, 8, 3);
+    s_battery = label(screen, 56, &lv_font_montserrat_14);
+    lv_obj_set_align(s_battery, LV_ALIGN_TOP_LEFT);
+    lv_obj_set_pos(s_battery, 179, 56);
+    lv_obj_set_width(s_battery, 42);
     lv_obj_set_style_text_align(s_battery, LV_TEXT_ALIGN_RIGHT, 0);
-    ui_pixel_panel_create(screen, 9, 58, 217, 169, UI_PAPER);
-    s_state = label(screen, 73, &plank_zh_16);
+    s_mute = label(screen, 55, &plank_zh_16);
+    lv_obj_set_align(s_mute, LV_ALIGN_TOP_LEFT);
+    lv_obj_set_pos(s_mute, 130, 55);
+    lv_obj_set_width(s_mute, 44);
+    lv_obj_set_style_text_align(s_mute, LV_TEXT_ALIGN_RIGHT, 0);
+    lv_label_set_text(s_mute, "静音");
+    lv_obj_add_flag(s_mute, LV_OBJ_FLAG_HIDDEN);
+    s_state = label(screen, 55, &plank_zh_16);
     lv_obj_set_align(s_state, LV_ALIGN_TOP_LEFT);
-    lv_obj_set_pos(s_state, 23, 73);
-    lv_obj_set_width(s_state, 88);
+    lv_obj_set_pos(s_state, 22, 55);
+    lv_obj_set_width(s_state, 104);
     lv_obj_set_style_text_align(s_state, LV_TEXT_ALIGN_LEFT, 0);
-    s_time = label(screen, 124, &lv_font_montserrat_32);
+    box(screen, 20, 80, 200, 2, 0xD9E7EC, 0, 0);
+    s_time = label(screen, 142, &lv_font_montserrat_32);
     plank_digits_create(&s_minutes, screen, 4, 28, false);
-    lv_obj_set_pos(s_minutes.obj, 111, 71);
-    s_minute_unit = ui_pixel_label(screen, "MIN", &lv_font_montserrat_14, UI_INK);
-    lv_obj_set_pos(s_minute_unit, 184, 83);
+    lv_obj_set_pos(s_minutes.obj, 53, 92);
+    s_minute_unit = label(screen, 102, &lv_font_montserrat_14);
+    lv_label_set_text(s_minute_unit, "MIN");
+    lv_obj_set_align(s_minute_unit, LV_ALIGN_TOP_LEFT);
+    lv_obj_set_pos(s_minute_unit, 122, 102);
     lv_obj_set_size(s_minute_unit, 31, 18);
     plank_digits_create(&s_seconds, screen, 2, 64, false);
-    lv_obj_set_pos(s_seconds.obj, 49, 120);
+    lv_obj_set_pos(s_seconds.obj, 53, 128);
     plank_digits_create(&s_fraction, screen, 2, 32, true);
-    lv_obj_set_pos(s_fraction.obj, 149, 152);
+    lv_obj_set_pos(s_fraction.obj, 149, 160);
     s_dot = lv_obj_create(screen);
     lv_obj_remove_style_all(s_dot);
-    lv_obj_set_pos(s_dot, 137, 179);
+    lv_obj_set_pos(s_dot, 137, 187);
     lv_obj_set_size(s_dot, 5, 5);
     lv_obj_set_style_bg_color(s_dot, lv_color_hex(0x162E32), 0);
     lv_obj_set_style_bg_opa(s_dot, LV_OPA_COVER, 0);
     lv_obj_set_style_radius(s_dot, 1, 0);
     plank_digits_create(&s_countdown, screen, 1, 64, false);
-    lv_obj_set_pos(s_countdown.obj, 102, 120);
-    s_detail = label(screen, 197, &plank_zh_16);
-    lv_obj_t *commands = lv_obj_create(screen);
-    lv_obj_remove_style_all(commands);
-    lv_obj_set_pos(commands, 0, 235);
-    lv_obj_set_size(commands, 240, 51);
-    lv_obj_set_style_bg_color(commands, lv_color_hex(UI_INK), 0);
-    lv_obj_set_style_bg_opa(commands, LV_OPA_COVER, 0);
-    s_keys_label = label(screen, 242, &plank_zh_16);
-    lv_obj_set_align(s_keys_label, LV_ALIGN_TOP_LEFT);
-    lv_obj_set_pos(s_keys_label, 16, 242);
-    lv_obj_set_width(s_keys_label, 170);
-    lv_obj_set_style_text_align(s_keys_label, LV_TEXT_ALIGN_LEFT, 0);
+    lv_obj_set_pos(s_countdown.obj, 102, 128);
+    s_detail = label(screen, 208, &plank_zh_16);
+    s_voice_bar = box(screen, 8, 250, 224, 32, 0xD9E7EC, 6, 2);
+    s_voice = label(s_voice_bar, 5, &plank_zh_16);
+    lv_obj_set_width(s_voice, 212);
+    lv_obj_t *footer = box(screen, 0, 292, 240, 28, UI_INK, 0, 0);
+    s_keys_label = label(footer, 5, &plank_zh_16);
+    lv_obj_set_width(s_keys_label, 232);
     lv_obj_set_style_text_color(s_keys_label, lv_color_hex(0xFFFFFF), 0);
-    s_sound = ui_pixel_label(screen, "", &plank_zh_16, 0xFFFFFF);
-    lv_obj_set_pos(s_sound, 16, 290);
-    lv_obj_set_style_text_color(s_sound, lv_color_hex(UI_INK), 0);
-    ui_pixel_mascot_create(screen, 187, 268);
+    s_volume_box = box(screen, 40, 94, 160, 40, UI_INK, 8, 0);
+    s_volume = label(s_volume_box, 10, &plank_zh_16);
+    lv_obj_set_width(s_volume, 152);
+    lv_obj_set_style_text_color(s_volume, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_add_flag(s_volume_box, LV_OBJ_FLAG_HIDDEN);
     lv_screen_load(screen);
 }
 
@@ -98,10 +141,21 @@ static void show_stopwatch_time(uint64_t duration_ms)
     lv_obj_clear_flag(s_seconds.obj, LV_OBJ_FLAG_HIDDEN);
     lv_obj_clear_flag(s_fraction.obj, LV_OBJ_FLAG_HIDDEN);
     lv_obj_clear_flag(s_dot, LV_OBJ_FLAG_HIDDEN);
-    plank_digits_set(&s_seconds, (unsigned)(seconds % 60));
+    unsigned secs = (unsigned)(seconds % 60);
+    unsigned places = secs >= 10 ? 2 : 1;
+    int x = 120 - (int)(places * 40 - 4 + 58) / 2 - (int)(2 - places) * 40;
+    lv_obj_set_x(s_seconds.obj, x);
+    lv_obj_set_x(s_dot, x + 84);
+    lv_obj_set_x(s_fraction.obj, x + 96);
+    plank_digits_set(&s_seconds, secs);
     plank_digits_set(&s_fraction, (unsigned)(duration_ms % 1000 / 10));
     if (seconds >= 60) {
         unsigned minutes = (unsigned)(seconds / 60);
+        unsigned m_places = minutes >= 1000 ? 4 : minutes >= 100 ? 3 : minutes >= 10 ? 2 : 1;
+        int m_width = (int)m_places * 16 - 1;
+        int m_x = 120 - (m_width + 34) / 2;
+        lv_obj_set_x(s_minutes.obj, m_x - (63 - m_width));
+        lv_obj_set_x(s_minute_unit, m_x + m_width + 6);
         lv_obj_clear_flag(s_minutes.obj, LV_OBJ_FLAG_HIDDEN);
         lv_obj_clear_flag(s_minute_unit, LV_OBJ_FLAG_HIDDEN);
         plank_digits_set(&s_minutes, minutes);
@@ -112,23 +166,31 @@ static void show_stopwatch_time(uint64_t duration_ms)
 }
 
 void plank_ui_refresh(const plank_model_t *model, uint64_t now, int battery,
-                      bool audio_ok, bool buttons_ok)
+                      bool audio_ok, bool buttons_ok, const char *voice_text,
+                      uint32_t voice_color, unsigned volume, bool volume_visible)
 {
     char text[24];
-    lv_label_set_text(s_sound, !audio_ok ? "声音不可用" : model->sound ? "声音 开" : "声音 关");
+    lv_obj_set_style_bg_color(s_voice_bar, lv_color_hex(voice_color), 0);
+    lv_label_set_text(s_voice, voice_text ? voice_text : "语音就绪");
+    if (volume == 0) lv_obj_clear_flag(s_mute, LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_add_flag(s_mute, LV_OBJ_FLAG_HIDDEN);
+    if (volume_visible) {
+        if (volume) lv_label_set_text_fmt(s_volume, "音量 %u%%", volume);
+        else lv_label_set_text(s_volume, "已静音");
+        lv_obj_clear_flag(s_volume_box, LV_OBJ_FLAG_HIDDEN);
+    } else lv_obj_add_flag(s_volume_box, LV_OBJ_FLAG_HIDDEN);
     if (battery < 0) lv_label_set_text(s_battery, "--%");
     else lv_label_set_text_fmt(s_battery, "%d%%", battery);
     const char *state = "自由计时";
     const char *detail = "";
-    lv_obj_set_y(s_detail, 197);
-    const char *keys = "确定:开始\n上:声音 下:历史";
+    const char *keys = "确定:开始";
     switch (model->state) {
         case PLANK_READY:
             show_stopwatch_time(0);
             if (!model->storage_available) { state = "存取失败"; detail = "仅本次开机保留"; }
             else if (model->history.revision > model->durable_revision) {
                 detail = model->save == PLANK_SAVE_PENDING ? "保存中..." : "有未保存记录";
-                keys = model->save == PLANK_SAVE_PENDING ? "" : "上:重试 确定:开始\n下:历史";
+                keys = "确定:开始";
             }
             break;
         case PLANK_PREPARING:
@@ -137,7 +199,7 @@ void plank_ui_refresh(const plank_model_t *model, uint64_t now, int battery,
             lv_obj_clear_flag(s_countdown.obj, LV_OBJ_FLAG_HIDDEN);
             plank_digits_set(&s_countdown, plank_prepare_seconds(model, now));
             detail = "";
-            keys = "任意键取消";
+            keys = "确定:取消";
             break;
         case PLANK_RUNNING:
             state = "计时中";
@@ -149,20 +211,17 @@ void plank_ui_refresh(const plank_model_t *model, uint64_t now, int battery,
                 show_stopwatch_time(plank_elapsed(model, now));
             }
             detail = "";
-            keys = "任意键结束并保存";
+            keys = "确定:结束";
             break;
         case PLANK_RESULT:
             state = "已结束";
             show_stopwatch_time(model->result_ms);
             detail = model->save == PLANK_SAVE_PENDING ? "保存中..." :
                      model->save == PLANK_SAVE_OK ? "已保存" : "未保存 仅临时保留";
-            keys = model->save == PLANK_SAVE_PENDING ? "" :
-                   model->save == PLANK_SAVE_FAILED && model->storage_available ?
-                   "上:重试 确定:开始\n下:历史" : "确定:开始\n上:声音 下:历史";
+            keys = "确定:开始";
             break;
         case PLANK_HISTORY:
             state = "最近记录";
-            lv_obj_set_y(s_detail, 177);
             if (!model->history.count) {
                 show_static_time("--:--.--", &lv_font_montserrat_32);
                 detail = model->storage_available ? "还没有记录" : "历史不可用";
@@ -170,14 +229,19 @@ void plank_ui_refresh(const plank_model_t *model, uint64_t now, int battery,
                 unsigned i = model->history_index;
                 plank_format_time(model->history.duration_ms[i], text, sizeof(text));
                 show_static_time(text, &lv_font_montserrat_32);
-                lv_label_set_text_fmt(s_detail, "%u / %u (从新到旧)\n%s", i + 1,
+                lv_label_set_text_fmt(s_detail, "%u / %u %s", i + 1,
                                       (unsigned)model->history.count,
-                                      plank_record_saved(model, i) ? "已保存 无日期" : "未保存 无日期");
+                                      plank_record_saved(model, i) ? "已保存" : "未保存");
                 detail = NULL;
             }
-            keys = "上:较新 下:较旧\n确定:返回";
+            keys = "确定:返回";
             break;
     }
+    if (model->state == PLANK_READY && model->storage_available && !detail[0])
+        detail = "就位后按确定开始";
+    if ((model->state == PLANK_READY || model->state == PLANK_RESULT) &&
+        model->save == PLANK_SAVE_PENDING) keys = "保存中...";
+    if (!audio_ok && model->state == PLANK_READY) state = "声音不可用";
     if (!buttons_ok) { state = "按键不可用"; keys = "重新开机再试"; }
     lv_label_set_text(s_state, state);
     if (detail) lv_label_set_text(s_detail, detail);

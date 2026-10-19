@@ -20,7 +20,8 @@ typedef enum {
 typedef struct {
     char name[32];
     char call_id[48];
-    char arguments[160];
+    char arguments[256];
+    uint32_t trace_turn;
 } step_tool_t;
 
 // 直连 StepFun Realtime。api_key 只在本任务内使用，不写日志。
@@ -29,7 +30,9 @@ esp_err_t step_voice_start(const char *api_key);
 void step_voice_ptt(bool held);
 step_state_t step_voice_state(void);
 bool step_voice_owns_audio(void);
-void step_voice_text(char *out, size_t cap);
+// Called only by the application's speaker worker; never writes to I2S itself.
+size_t step_voice_read_pcm(int16_t *pcm, size_t capacity);
+bool step_voice_take_sent(void);
 
 // 主循环取出待执行的工具；没有则返回 false。
 bool step_voice_take_tool(step_tool_t *tool);
