@@ -119,15 +119,23 @@ be hidden behind an SDK helper that asserts or ignores task-creation results.
 - The vendor porch, power, and gamma sequence in `bsp_display.c` is panel-specific. Do not treat it as a universal ST7789 sequence.
 - `swap_bytes=true` is required because LVGL emits little-endian RGB565 while SPI sends the high byte first.
 
-The LVGL DMA buffer is one `240 × 20` RGB565 buffer, about 9.6 KB; the LVGL internal pool is 24 KB. Do not add large/double buffers without checking internal RAM, the largest contiguous heap block, and I2S DMA.
+The LVGL DMA buffer is one `240 × 40` RGB565 buffer: 19,200 bytes (18.75 KiB), selected by `BSP_LVGL_DRAW_BUFFER_LINES` in `bsp_display_lvgl.c`. The internal LVGL pool is 49,152 bytes (48 KiB) in `sdkconfig.defaults`. Do not add large/double buffers without checking internal RAM, the largest contiguous heap block, and I2S DMA.
 
-The final LVGL RGB565 flush is masked to a global 30 px radius, so the four areas outside the rounded screen remain pure black during page changes as well as normal rendering. The mask is applied directly to the partial draw buffer and does not use root-screen `clip_corner`; full-screen rounded clipping requires an ARGB intermediate layer that can exhaust the 24 KB LVGL pool on this no-PSRAM target. Keep this behavior in the display integration instead of duplicating corner decorations in individual pages.
+The final LVGL RGB565 flush is masked to a global 30 px radius, so the four areas outside the rounded screen remain pure black during page changes as well as normal rendering. The mask is applied directly to the partial draw buffer and does not use root-screen `clip_corner`; full-screen rounded clipping requires an ARGB intermediate layer that competes with the UI for the limited LVGL pool on this no-PSRAM target. Keep this behavior in the display integration instead of duplicating corner decorations in individual pages.
 
 Register the display and rounding callback under the same recursive LVGL port
 lock, before the first flush. Registration failure must not leave an unmasked
 display running or reinitialize a port whose previous task may still be alive.
 
-Before terminal deep sleep, stop new page work and hold the LVGL lock long enough to finish any current flush. `bsp_display_prepare_deep_sleep()` then sends display-off and Sleep In, stops the backlight PWM at low level, drives CS high and SCLK/MOSI/DC/backlight low, enables per-pin hold, and enables the ESP32-C3 global deep-sleep hold. `bsp_display_init()` disables the global and per-pin holds before SPI or LEDC takes ownership after wake. This terminal API is not a reversible display blanking operation and must be followed immediately by deep sleep or restart.
+Before terminal deep sleep, stop new page work and hold the LVGL lock to prevent new rendering. The lock alone does not drain queued SPI DMA; the display-off command in `bsp_display_prepare_deep_sleep()` drains it before Sleep In. The API then stops the backlight PWM at low level, drives CS high and SCLK/MOSI/DC/backlight low, enables per-pin hold, and enables the ESP32-C3 global deep-sleep hold. `bsp_display_init()` disables the global and per-pin holds before SPI or LEDC takes ownership after wake. This terminal API must be followed immediately by deep sleep or restart; it is not reversible blanking.
+
+For reversible display-only sleep after display/LVGL initialization, use `bsp_display_set_sleep(bool)` from a single application task, outside LVGL callbacks and without holding the LVGL mutex. Direct panel/IO access must not race this lifecycle.
+
+- **Sleep:** pause the display refresher and prevent UI invalidation from resuming it; display-off drains outstanding SPI DMA before Sleep In. Sleep In/Out settle for at least 120 ms outside the mutex, while other LVGL timers remain active.
+- **Wake:** enable the panel, redraw the entire screen and drain the final DMA before returning success. The application owns the backlight: turn it off before sleep, and enable it only after a successful wake.
+- **Failure:** refresh stays paused and panel state may be uncertain. Retry explicitly, including `set_sleep(false)` even when the last successful mode was awake; do not enable the backlight on a failed wake.
+
+The reversible API preserves PWM, GPIO ownership, audio and connectivity; it does not put the MCU to sleep. See the [operating guide](../health-companion.md#screen-idle-and-panel-sleep) for idle policy and the [acceptance record](../plan.md#device-acceptance-boundary) for completed and pending device checks.
 
 LVGL is not thread-safe. Timer callbacks in LVGL context may access objects directly. Button callbacks must not access LVGL; they enqueue input for the lifecycle task. The lifecycle task and other workers must use `bsp_lvgl_lock()`/`bsp_lvgl_unlock()` for short UI operations. Stop producers before deleting a page and clear static object pointers afterward.
 
@@ -213,7 +221,7 @@ preserved. See the [firmware layout](../development/engineering/firmware-layout.
 
 The console is USB Serial/JTAG. Do not switch to the UART0 default output without resolving its GPIO21 conflict with the backlight.
 
-Review at least the 24 KB LVGL pool, 9.6 KB LCD DMA buffer, I2S DMA, 96 KB demo recording, radio stacks, task stacks, total free heap, and largest contiguous block when adding assets, TLS/networking, audio buffers, or double buffering.
+Review at least the 48 KiB LVGL pool, 19,200-byte LCD DMA buffer, I2S DMA, 96 KB demo recording, radio stacks, task stacks, total free heap, and largest contiguous block when adding assets, TLS/networking, audio buffers, or double buffering.
 
 ## 11. Adding features
 

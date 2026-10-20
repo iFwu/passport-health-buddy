@@ -1,6 +1,4 @@
-// Minimal FreeRTOS stub for the host tests: only the delay used by
-// bsp_button_prepare_deep_sleep() to let the pull-up settle. The test that
-// includes the real BSP implementation provides vTaskDelay().
+// Minimal FreeRTOS delay seam; each test supplies its own vTaskDelay().
 #pragma once
 
 #include <stdint.h>

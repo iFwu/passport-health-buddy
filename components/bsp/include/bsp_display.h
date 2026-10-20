@@ -42,6 +42,16 @@ struct _lv_display_t;
 // 不覆盖依赖中可能尚未退出的任务。首次初始化由单一任务串行调用。
 struct _lv_display_t *bsp_lvgl_init(void);
 
+// 可恢复的 ST7789 面板休眠，不进入 MCU sleep，也不停止 LVGL 的其他 timer。
+// 必须已成功初始化 display 和 LVGL；由同一应用任务串行调用，不可在 LVGL
+// 回调内或持有 LVGL lock 时调用。内部协调刷新和 DMA，sleep/wake 最少阻塞
+// 120ms，但等待面板时释放 LVGL lock。重复成功请求无副作用。
+// 调用方在 sleep 前关背光，只有 wake 返回 ESP_OK（全屏重绘和 DMA 完成）后
+// 才可开背光。失败后硬件状态可能不确定，刷新保持暂停；可重试任一目标，
+// 尤其 set_sleep(false) 始终可恢复未完成的转换，不能仅依据上次成功模式跳过。
+// 不改 PWM、引脚 hold、音频或 Wi-Fi；休眠期间不要直接访问 panel/io。
+esp_err_t bsp_display_set_sleep(bool asleep);
+
 // LVGL 非线程安全:在【非 LVGL 任务】里操作任何 lv_* 对象前后必须加解锁。
 // LVGL 尚未就绪或超时时 lock 返回 false；只有 lock 成功后才调用 unlock。
 bool bsp_lvgl_lock(int timeout_ms);

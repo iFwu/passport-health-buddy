@@ -47,14 +47,16 @@ it anything—from a pocket companion to something no one has imagined yet.
 | I want to… | Start here |
 | --- | --- |
 | Use the device or try an official play | [Getting started](https://ai-passport.folotoy.cn/guides/getting-started/) · [Official plays](https://ai-passport.folotoy.cn/plays/) |
+| Use this checkout's Health Companion | [Controls, activities and screen sleep](health-companion.md) · [Current firmware and acceptance](plan.md#device-acceptance-boundary) |
 | Build a custom application with AI | [Agent instructions](../AGENTS.md) · [AI development guide](development/ai-guide.md) · [Required skills](../skills/README.md) |
 | Prepare my environment and build firmware | [Environment setup](/docs/development/engineering/environment-setup.md) · [Build and test](development/engineering/build-and-test.md) |
 | Explore the board or contribute | [Hardware guide](hardware-design/AI_HARDWARE_DEVELOPMENT_GUIDE.md) · [Contributing](../.github/CONTRIBUTING.md) |
 
 > [!IMPORTANT]
-> `main` is a minimal, runnable **hardware-test baseline**, not a finished application.
-> Derivative applications must design their own UI; the current demo test menu and
-> screens must not be reused. BSP APIs and non-UI logic remain reusable.
+> This checkout runs **Wearable Health Companion**. The upstream hardware-test
+> baseline and retained demo sources are references, not this application's UI.
+> Derivative applications must design their own UI; do not reuse the demo menu
+> or screens. BSP APIs and non-UI logic remain reusable.
 
 ## Start development with one requirement
 
@@ -183,7 +185,7 @@ in `main`. Keep that boundary when building your own firmware.
 ```text
 components/bsp/include/  Public BSP APIs and bsp_pins.h hardware facts
 components/bsp/src/      Display, button, audio, battery, and shared-I2C implementations
-main/                    Plank free-timer application, plus demo sources kept for host tests
+main/                    Health Companion, voice workers, local activities, and retained demo test sources
 tests/                   Lightweight logic tests that can run without hardware
 tools/                   Shared local/CI validation and firmware verification scripts
 docs/                    Project docs, changelog, engineering/contribution rules, and design references
@@ -200,8 +202,8 @@ LICENSE                  Repository license
 
 ## Documentation index
 
-- [Wearable health companion](health-companion.md): target product shape, Step realtime voice design, and roadmap.
-- [Development plan](plan.md): architecture decisions, StepFun measurements, schedule, and acceptance.
+- [Wearable health companion](health-companion.md): current controls, offline activities, voice commands, and automatic screen sleep.
+- [Development plan](plan.md): architecture, measurements, exact flashed firmware, confirmed results, and pending regression checks.
 - [Plank free timer](plank-trainer.md): Chinese manual for the dedicated timer, its records, and install boundaries.
 - [Firmware introduction](learning/README.md): Chinese lesson, practice, and term reference.
 

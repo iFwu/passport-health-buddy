@@ -5,6 +5,10 @@
 #include "bsp_pins.h"
 #include "esp_lvgl_port.h"
 #include "esp_log.h"
+#include "esp_lcd_panel_commands.h"
+#include "esp_lcd_panel_io.h"
+#include "esp_lcd_panel_ops.h"
+#include "freertos/task.h"
 #include <string.h>
 
 static const char *TAG = "bsp_lvgl";
@@ -14,6 +18,39 @@ static const char *TAG = "bsp_lvgl";
 static lv_display_t *s_disp;
 static bool s_port_initialized;
 static bool s_port_init_failed;
+static bool s_refresh_paused;
+static bool s_panel_asleep;
+static esp_err_t s_flush_error;
+
+// LVGL 9.5's internal REFR_REQUEST callback resumes the refresh timer, even
+// when an object only marks its layout dirty. Run after it so UI/animation
+// timers may keep changing objects without restarting an asleep display.
+static void refresh_request_event(lv_event_t *event)
+{
+    if (s_refresh_paused) {
+        lv_timer_pause(lv_display_get_refr_timer(lv_event_get_target(event)));
+    }
+}
+
+static void display_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *pixels)
+{
+    // Also protect against an explicit lv_refr_now() while the panel is asleep.
+    if (s_refresh_paused) {
+        lv_display_flush_ready(disp);
+        return;
+    }
+    // This BSP uses partial, single-buffer RGB565 with no software rotation.
+    // Port 2.9's equivalent callback discards draw_bitmap's error, leaving
+    // LVGL waiting forever for a DMA completion that will never arrive.
+    lv_draw_sw_rgb565_swap(pixels, lv_area_get_size(area));
+    esp_err_t err = esp_lcd_panel_draw_bitmap(bsp_display_panel(), area->x1, area->y1,
+                                             area->x2 + 1, area->y2 + 1, pixels);
+    if (err != ESP_OK) {
+        if (s_flush_error == ESP_OK) s_flush_error = err;
+        lv_display_flush_ready(disp);
+        ESP_LOGE(TAG, "LCD flush failed: %s", esp_err_to_name(err));
+    }
+}
 
 static void rounded_flush_event(lv_event_t *event)
 {
@@ -97,14 +134,15 @@ lv_display_t *bsp_lvgl_init(void) {
         return NULL;
     }
     lv_display_t *disp = lvgl_port_add_disp(&dc);
-    bool mask_registered = false;
+    bool callbacks_registered = false;
     if (disp) {
-        // LVGL 9.5 returns void here; check the list while still holding the lock.
+        // LVGL 9.5 returns void here; check both registrations under the lock.
         const uint32_t count = lv_display_get_event_count(disp);
         lv_display_add_event_cb(disp, rounded_flush_event, LV_EVENT_FLUSH_START, NULL);
-        mask_registered = lv_display_get_event_count(disp) == count + 1;
+        lv_display_add_event_cb(disp, refresh_request_event, LV_EVENT_REFR_REQUEST, NULL);
+        callbacks_registered = lv_display_get_event_count(disp) == count + 2;
     }
-    if (!mask_registered) {
+    if (!callbacks_registered) {
         ESP_LOGE(TAG, "LVGL display 或圆角回调注册失败");
         if (disp) lvgl_port_remove_disp(disp);
         lvgl_port_unlock();
@@ -117,10 +155,71 @@ lv_display_t *bsp_lvgl_init(void) {
     // Full-screen rounded clipping creates an ARGB layer that does not fit the
     // 24 KB LVGL pool reliably on this no-PSRAM target.
     s_disp = disp;
+    lv_display_set_flush_cb(disp, display_flush);
     lvgl_port_unlock();
 
     ESP_LOGI(TAG, "LVGL 就绪，全局圆角=%d，外部填充=黑色", BSP_LVGL_SCREEN_RADIUS);
     return s_disp;
+}
+
+esp_err_t bsp_display_set_sleep(bool asleep)
+{
+    if (!s_disp || !bsp_display_panel() || !bsp_display_io()) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    if (!lvgl_port_lock(0)) return ESP_ERR_INVALID_STATE;
+    if ((asleep && s_panel_asleep) || (!asleep && !s_refresh_paused)) {
+        lvgl_port_unlock();
+        return ESP_OK;
+    }
+
+    s_refresh_paused = true;
+    s_panel_asleep = false; // Until the entire requested transition succeeds.
+    lv_timer_pause(lv_display_get_refr_timer(s_disp));
+
+    // The mutex only excludes new rendering, NOT the final queued SPI DMA.
+    // IDF 5.5.3 tx_param drains all color transactions before polling its
+    // command. DISPOFF therefore waits for the final flush before display-off.
+    // The port's DMA ISR only calls flush_ready; it never takes the LVGL lock.
+    esp_err_t err = ESP_OK;
+    if (asleep) err = esp_lcd_panel_disp_on_off(bsp_display_panel(), false);
+    if (err == ESP_OK) {
+        // IDF's ST7789 disp_sleep adds only 100ms. Send the same command here
+        // with a full 120ms settling interval outside the LVGL lock, also
+        // covering an immediate reverse request and a potentially sent error.
+        err = esp_lcd_panel_io_tx_param(bsp_display_io(),
+                                       asleep ? LCD_CMD_SLPIN : LCD_CMD_SLPOUT, NULL, 0);
+        lvgl_port_unlock();
+        vTaskDelay(pdMS_TO_TICKS(120) + 1);
+        if (err != ESP_OK) return err;
+        if (!lvgl_port_lock(0)) return ESP_ERR_INVALID_STATE;
+    }
+    if (err == ESP_OK && asleep) {
+        s_panel_asleep = true;
+    } else if (err == ESP_OK) {
+        err = esp_lcd_panel_disp_on_off(bsp_display_panel(), true);
+        if (err == ESP_OK) {
+            s_refresh_paused = false;
+            s_flush_error = ESP_OK;
+            lv_obj_invalidate(lv_display_get_screen_active(s_disp));
+            lv_refr_now(s_disp);
+            s_refresh_paused = true;
+            lv_timer_pause(lv_display_get_refr_timer(s_disp));
+            // A partial-buffer refresh returns with its final DMA outstanding.
+            // -1 is the documented commandless tx_param queue-drain barrier.
+            esp_err_t drain_err = esp_lcd_panel_io_tx_param(bsp_display_io(), -1, NULL, 0);
+            err = s_flush_error != ESP_OK ? s_flush_error : drain_err;
+            if (err == ESP_OK) {
+                s_refresh_paused = false;
+                lv_timer_resume(lv_display_get_refr_timer(s_disp));
+                lv_timer_ready(lv_display_get_refr_timer(s_disp));
+            }
+        }
+    }
+    // Every failure leaves refresh paused and the state non-idempotent so a
+    // later wake repeats the hardware sequence rather than claiming success.
+    lvgl_port_unlock();
+    return err;
 }
 
 bool bsp_lvgl_lock(int timeout_ms) {

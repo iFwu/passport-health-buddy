@@ -75,6 +75,39 @@ The [product operating guide](health-companion.md) defines current controls and 
 
 ## Device acceptance boundary
 
+Current idle policy and controls are defined in the [operating guide](health-companion.md#screen-idle-and-panel-sleep). Basic on-device screen sleep and key wake are confirmed; this does not certify every gesture, sustained operation or power consumption.
+
+### Current display-power firmware
+
+| Identity | Value |
+| --- | --- |
+| Verified bundle / full-image SHA-256 | `build/firmware/4c74aaf68c31a9655a4c8b812ad5771ee23574cb4bd106dfe5fc8ca58f979d1b/` |
+| Application SHA-256 | `8e325669f61c4c8bd4b3a7bdf60fdc22246c32954b6464a81cdaad6eb1680739` |
+| ELF SHA-256 | `f1299d127168d1c4fedf0005dda70712f6c04ee483de513de8636585ffb123db` |
+
+Confirmed evidence:
+
+- Complete gate passed, including host tests, firmware layout verification and actual desktop LVGL rendering. A separate real-LVGL smoke run exercised three sleep/wake cycles, refresh suppression, continuing timers and wake-only gesture consumption with simulated panel IO.
+- Before flashing, the device partition table passed MD5 validation. Its factory application starts at `0x10000` with a 3 MiB limit; the 1,705,936-byte image fits. Only the application was written and hash-verified. The existing partition table, NVS, other data and Recovery were not written; do not substitute a merged `0x0` flash for this preservation workflow.
+- Boot matched the ELF prefix; buttons/audio/storage initialized, Ready reported 147,244 bytes free heap, Wi-Fi obtained an address and the StepFun session became ready.
+- Bounded board observation recorded `Screen dim` at uptime 121,242 ms and `Screen asleep` at 301,267 ms, with no observed panic or screen-transition failure marker. The serial monitor closed afterward.
+- Basic physical screen sleep and key wake are accepted. No measured current or battery-runtime result is available.
+
+### Screen-sleep regression checklist
+
+These checks extend basic acceptance; they are not recorded as passed on hardware.
+
+| Scenario | Steps and expected result | Priority |
+| --- | --- | --- |
+| Complete wake gesture matrix | From Office after 5 minutes idle, test short/long presses of each key and overlapping keys. Until every key is released and a fresh gesture begins, water, volume, page and recording state must remain unchanged. | P0 |
+| Protected operations and release | Run plank or a long interval/rest timer for over 5 minutes, including while viewing Help; the screen stays bright. Stop/complete it and check a full idle period restarts. Repeat during recording and a reply. | P1 |
+| Repeated wake and sustained voice | Keep the realtime session connected and repeat sleep/wake; check no stale frame, color change or black screen, then exercise sustained speech. Measure board current separately; no runtime improvement is claimed. | P1 |
+| Reminder wake while muted or audible | Leave Office asleep until an activity/hydration reminder. It shows the notice without a key press, sounds only when unmuted, and does not change records. | P1 |
+| Provisioning and saved state | Leave the provisioning page visible beyond 5 minutes; credentials remain readable. After sleep/wake and a power cycle, confirm the last successfully saved volume and records remain intact. | P1 |
+
+### Earlier firmware observations
+
+
 The four-activity application ELF `093145328dd4195198d4f740caaaf9aa1d4e0d4f7fa66bc1e989adbc35adc797` belongs to verified bundle `171e17699cb55ec1a1e7a79b1ef063e780f0ebf84ac89fa5a15ef45b8f83fcfc`. The complete gate passed, including actual LVGL activity/phase rendering and conflict/navigation checks. Only the application at `0x10000` was flashed and hash-verified; partition table, NVS and Recovery were not written. Boot matched the ELF, reported buttons/audio/storage initialized and 147,144 bytes free heap at Ready, then established the StepFun realtime session. The bounded startup observation showed no panic or allocation failure. Physical viewing, button execution, phase sounds and sustained speech under activity rendering remain unverified; the earlier spoken-workout issue is not claimed fixed.
 
 Application ELF `acc633936ab9d52090669457874068dcc88078b64b40cc7a243a993bc1dcb4f9` was written only at `0x10000` and verified. Physical controls, hydration speech, cues, and hydration/mute persistence across power-off were confirmed on device. The spoken bench-press set of 60 kg for 8 reps did not add a record; interval plans remain unverified on hardware. That serial trace showed input submission, final ASR, an audio response and `response.done`, but no logged tool-call event; it does not establish whether recognition or prompt behavior failed. Further diagnosis uses the new per-utterance trace. Old-image acceptance does not certify all functions in a new image.

@@ -46,13 +46,14 @@
 | 我想要…… | 从这里开始 |
 | --- | --- |
 | 使用设备、体验官方玩法 | [快速上手](https://ai-passport.folotoy.cn/guides/getting-started/) · [官方玩法](https://ai-passport.folotoy.cn/plays/) |
+| 使用当前健康助手应用 | [按键、活动与屏幕休眠](health-companion.zh_CN.md) · [当前固件与验收](plan.zh_CN.md#真机验收边界) |
 | 让 AI 开发自定义应用 | [Agent 规范](../AGENTS.zh_CN.md) · [AI 开发指南](development/ai-guide.zh_CN.md) · [必需技能](../skills/README.zh_CN.md) |
 | 准备环境、编译固件 | [环境准备](/docs/development/engineering/environment-setup.zh_CN.md) · [构建与测试](development/engineering/build-and-test.zh_CN.md) |
 | 了解硬件、参与贡献 | [硬件指南](hardware-design/AI_HARDWARE_DEVELOPMENT_GUIDE.zh_CN.md) · [贡献指南](../.github/CONTRIBUTING.zh_CN.md) |
 
 > [!IMPORTANT]
-> `main` 是最小可运行的**硬件测试基线**，不是成品应用。
-> 二次开发必须重新设计 UI，禁止沿用当前 demo 测试菜单和页面；
+> 当前工作树运行**随身健康助手**。上游硬件测试基线和保留的 demo 源码仅供参考，
+> 不是本应用的 UI。二次开发必须重新设计 UI，禁止沿用 demo 测试菜单和页面；
 > BSP API 与非 UI 逻辑仍可复用。
 
 ## 用一句需求开始开发
@@ -178,7 +179,7 @@ git switch -c feature/my-passport-app
 ```text
 components/bsp/include/  BSP 公开 API 与 bsp_pins.h 硬件事实
 components/bsp/src/      显示、按键、音频、电池、共享 I2C 实现
-main/                    平板支撑自由计时应用，以及仍供宿主测试使用的演示页源码
+main/                    健康助手、语音工作任务、离线活动及保留的 demo 测试源码
 tests/                   可脱离硬件运行的轻量逻辑测试源
 tools/                   本地与 CI 共用的验证及固件校验脚本
 docs/                    项目说明、变更记录、工程/协作规范与设计参考
@@ -195,8 +196,8 @@ LICENSE                  仓库许可证
 
 ## 文档索引
 
-- [随身健康助手](health-companion.zh_CN.md)：目标产品形态、Step 实时语音方案与路线。
-- [开发计划](plan.zh_CN.md)：架构决策、StepFun 实测、排期与验收。
+- [随身健康助手](health-companion.zh_CN.md)：当前按键、离线活动、语音命令与自动屏幕休眠。
+- [开发计划](plan.zh_CN.md)：架构、实测、已烧录固件标识、确认结果与待回归项目。
 - [平板支撑自由计时器](plank-trainer.md)：专用应用使用手册、记录语义与安装边界。
 - [固件入门中文小课](learning/README.md)：三分钟课程、即时反馈练习与术语参考。
 

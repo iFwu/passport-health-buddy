@@ -60,6 +60,22 @@ No physical undo or standing acknowledgement. Activity reminders run every 45 mi
 
 The plank ready/result page shows the current reading and save status alongside its activity illustration; the latest 20 durations are kept in NVS without an on-device history screen. A visible save status is not proof of a successful Flash write. Volume is saved separately in NVS about one second after adjustments stop; allow this time before power-off. Failures are shown; restart uses the last successfully saved volume.
 
+### Screen idle and panel sleep
+
+| Condition | Screen behavior |
+| --- | --- |
+| Active or idle for less than 2 minutes | 80% backlight |
+| Idle for 2–5 minutes | 30% backlight; any key restores normal brightness and still performs its usual action |
+| Idle for 5 minutes | Backlight off, ST7789 Sleep In, display refresh paused |
+| Plank preparation/timing, intervals, gym rest, recording or a pending/playing voice reply | Stay at normal brightness, even on another page |
+| Provisioning page visible, or buttons unavailable | Do not dim or sleep |
+
+While asleep, any of the three keys wakes the screen. That entire gesture is wake-only: release all keys, then press again to adjust volume, navigate, act or speak. Holding the wake key or overlapping another key does not bypass this rule. Activity/hydration notices and timer transitions restore normal brightness. Each interaction, reminder or completed protected operation starts a fresh idle period; a workout ending does not immediately black out the screen.
+
+Only the display sleeps; the device does not shut down or enter MCU light/deep sleep. Network connectivity, voice workers and timers keep running, and stored records are not cleared. Existing short/long gestures are unchanged; no manual-off shortcut or new button combination is assigned.
+
+Basic screen sleep and key wake have been confirmed on the device. The [acceptance record and remaining regression checks](plan.md#device-acceptance-boundary) distinguish this from full gesture, long-run and power validation. Developers should use the [display lifecycle contract](hardware-design/AI_HARDWARE_DEVELOPMENT_GUIDE.md#5-display-and-lvgl) for refresh locking, wake timing and failure recovery.
+
 ### Offline Home activities
 
 Plank is the main/default Home page, including explicit voice requests to switch Home. Long UP/DOWN selects among four activities using the same global navigation as Office, Gym and Help; it also leaves the provisioning screen without requiring network setup. All four Home pages show an activity name, `1/4`–`4/4` position indicator and long-press navigation hint; short UP/DOWN remains volume control, not activity selection.
@@ -210,9 +226,9 @@ With only ~400 KB internal SRAM and no external PSRAM:
 - Host validation covers gestures, timers, reminders, corrections and full-history persistence, saved mute, audio chunk continuity and actual LVGL rendering. Automated results are not hardware acceptance.
 
 ### 3. Hardware Specifications
-- **Display**: ST7789v3 240 × 320 color LCD, SPI interface, LVGL 9.3 partial redraws.
+- **Display**: ST7789P3 240 × 320 color LCD, SPI interface, RGB565 partial redraws. The LVGL version is pinned in `dependencies.lock`.
 - **Audio**: ES8311 codec, digital I2S, onboard omnidirectional microphone and miniature speaker.
-- **Battery**: 500 mAh Li-Po. After network configuration the app maintains its realtime session; it does not promise low-power sleep or a measured runtime.
+- **Battery**: 500 mAh Li-Po. Idle power management sleeps only the display; after network configuration the app maintains its realtime session. MCU sleep and a measured battery runtime are not claimed.
 - **Wi-Fi**: 2.4 GHz (802.11 b/g/n); 5 GHz is not supported.
 
 ### 4. Privacy & Data Integrity

@@ -141,11 +141,19 @@ Wi-Fi、NimBLE 和 light/deep sleep 直接使用 ESP-IDF API，不属于板级 B
 
 ### 5.2 LVGL 内存和线程规则
 
-ESP32-C3 无 PSRAM。当前 LVGL 显示缓冲为 `240 × 20` 像素的单 DMA 缓冲，RGB565 约 9.6 KB；`sdkconfig.defaults` 的 LVGL 内部池为 24 KB。不要直接改为大行数双缓冲，也不要扩大 UI 内存池而不检查内部 RAM、最大连续堆和 I2S DMA 初始化。
+ESP32-C3 无 PSRAM。LVGL 使用 `240 × 40` 像素的 RGB565 单 DMA 缓冲，共 19,200 字节（18.75 KiB），行数由 `bsp_display_lvgl.c` 的 `BSP_LVGL_DRAW_BUFFER_LINES` 定义；`sdkconfig.defaults` 中的 LVGL 内部池为 49,152 字节（48 KiB）。不要直接改为大行数双缓冲，也不要扩大 UI 内存池而不检查内部 RAM、最大连续堆和 I2S DMA 初始化。
 
-LVGL 最终输出的 RGB565 刷新区域会统一套用 30 px 圆角遮罩，因此正常刷新和页面切换期间，圆角之外的四角区域都会保持纯黑。遮罩直接作用于局部绘制缓冲，不使用根 screen 的 `clip_corner`；全屏圆角裁剪需要 ARGB 中间图层，在本项目无 PSRAM、LVGL 内存池仅 24 KB 的条件下可能耗尽内存。该行为统一放在显示接入层，不应在各页面重复绘制四角装饰。
+LVGL 最终输出的 RGB565 刷新区域统一套用 30 px 圆角遮罩，正常刷新和页面切换期间，圆角之外的四角区域均保持纯黑。遮罩直接作用于局部绘制缓冲，不使用根 screen 的 `clip_corner`；全屏圆角裁剪需要 ARGB 中间图层，会与 UI 竞争本项目有限的 LVGL 内存池。该行为统一放在显示接入层，不应在各页面重复绘制四角装饰。
 
-终端 deep sleep 前，应先阻止新页面任务，并持有 LVGL 锁等待当前 flush 完成。`bsp_display_prepare_deep_sleep()` 随后发送关闭显示和 Sleep In，将背光 PWM 停在低电平，设置 CS 为高电平，SCLK/MOSI/DC/背光为低电平，开启单引脚 hold 及 ESP32-C3 全局 deep-sleep hold。唤醒后 `bsp_display_init()` 会在 SPI 或 LEDC 接管前解除全局与单引脚 hold。该终端接口不是可恢复的息屏操作，调用后必须立即进入 deep sleep 或重启。
+终端 deep sleep 前，应先阻止新页面任务，并持有 LVGL 锁阻止新一轮绘制。锁本身不会排空已入队的 SPI DMA；`bsp_display_prepare_deep_sleep()` 中的关闭显示命令会在 Sleep In 前排空这些事务。接口随后将背光 PWM 停在低电平，设置 CS 为高电平、SCLK/MOSI/DC/背光为低电平，开启单引脚 hold 及 ESP32-C3 全局 deep-sleep hold。唤醒后 `bsp_display_init()` 在 SPI 或 LEDC 接管前解除全局与单引脚 hold。该终端接口调用后必须立即进入 deep sleep 或重启，不是可恢复的息屏操作。
+
+display／LVGL 初始化后，可由单一应用任务调用 `bsp_display_set_sleep(bool)` 实现可恢复的屏幕休眠；不可在 LVGL 回调内或持有 LVGL mutex 时调用。直接 panel/IO 访问不可与该生命周期并发。
+
+- **休眠：** 暂停显示刷新，并阻止 UI 失效事件恢复刷新；关闭显示命令排空尚未完成的 SPI DMA 后，再发送 Sleep In。Sleep In/Out 均在 mutex 外等待至少 120 ms，其他 LVGL timer 继续运行。
+- **唤醒：** 开启面板、全屏重绘并排空最后一笔 DMA 后才返回成功。背光由应用管理：休眠前关闭，仅在唤醒成功后开启。
+- **失败：** 刷新保持暂停，面板状态可能不确定。应显式重试，即使上次成功模式仍为亮屏，也须调用 `set_sleep(false)` 恢复；唤醒失败时不可开启背光。
+
+可恢复接口保留 PWM、GPIO 所有权、音频和网络，不使 MCU 休眠。[操作指南](../health-companion.zh_CN.md#空闲降亮度与屏幕休眠)定义空闲策略，[验收记录](../plan.zh_CN.md#真机验收边界)区分已完成和待验证的板端检查。
 
 LVGL 非线程安全：
 
@@ -265,8 +273,8 @@ SOC 准确度取决于电芯与 profile 的匹配程度。本驱动给出的是�
 
 内存审查至少关注：
 
-- LVGL 静态内存池 24 KB；
-- LCD DMA buffer 约 9.6 KB；
+- LVGL 静态内存池 48 KiB；
+- LCD DMA buffer 19,200 字节；
 - I2S DMA descriptor/frame buffer；
 - Audio demo 96 KB 录音堆；
 - Wi-Fi 驱动或 NimBLE host/controller（两个示例不同时常驻）；

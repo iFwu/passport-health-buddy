@@ -12,6 +12,7 @@
 #include "health_wifi.h"
 #include "health_portal.h"
 #include "health_input.h"
+#include "health_screen.h"
 #include "step_voice.h"
 #include "step_trace.h"
 #include "esp_log.h"
@@ -39,6 +40,11 @@ static uint64_t s_save_retry_at;
 static atomic_uint s_volume = 80;
 static atomic_bool s_voice_wanted;
 static health_input_t s_input;
+static health_screen_t s_screen;
+static health_screen_mode_t s_screen_mode = HEALTH_SCREEN_ACTIVE;
+static health_screen_mode_t s_screen_attempt;
+static bool s_screen_recovering;
+static uint64_t s_screen_retry_at;
 
 static bool stepfun_resolved(void)
 {
@@ -102,6 +108,31 @@ static atomic_uint s_audio_generation;
 static uint64_t now_ms(void)
 {
     return (uint64_t)esp_timer_get_time() / 1000;
+}
+
+static void screen_apply(health_screen_mode_t target, uint64_t now)
+{
+    if (target == s_screen_mode && !s_screen_recovering) return;
+    if (now < s_screen_retry_at && target == s_screen_attempt) return;
+    if (target == HEALTH_SCREEN_ASLEEP || s_screen_mode == HEALTH_SCREEN_ASLEEP ||
+        s_screen_recovering) {
+        bsp_display_backlight(0);
+        const esp_err_t err = bsp_display_set_sleep(target == HEALTH_SCREEN_ASLEEP);
+        if (err != ESP_OK) {
+            s_screen_recovering = true;
+            s_screen_attempt = target;
+            s_screen_retry_at = now + 1000;
+            ESP_LOGE(TAG, "Screen transition failed: %s", esp_err_to_name(err));
+            return;
+        }
+    }
+    s_screen_recovering = false;
+    s_screen_retry_at = 0;
+    s_screen_mode = target;
+    if (target != HEALTH_SCREEN_ASLEEP)
+        bsp_display_backlight(target == HEALTH_SCREEN_DIM ? 30 : 80);
+    ESP_LOGI(TAG, "Screen %s", target == HEALTH_SCREEN_ASLEEP ? "asleep" :
+             target == HEALTH_SCREEN_DIM ? "dim" : "active");
 }
 
 static void on_key(bsp_btn_t button, bsp_btn_ev_t event, void *user)
@@ -245,6 +276,7 @@ static void effects(unsigned effect)
 
 static void notice(const char *text, uint64_t now)
 {
+    health_screen_activity(&s_screen, now);
     if (bsp_lvgl_lock(100)) {
         health_ui_notice(text, now);
         bsp_lvgl_unlock();
@@ -361,6 +393,7 @@ void app_main(void)
     unsigned saved_volume = atomic_load(&s_volume);
     uint64_t volume_save_at = 0;
     unsigned previous_rest = 0;
+    health_screen_init(&s_screen, now_ms());
     for (;;) {
         key_event_t key;
         while (s_buttons_ok && xQueueReceive(s_keys, &key, 0) == pdTRUE) {
@@ -371,6 +404,9 @@ void app_main(void)
             else continue;
             const health_key_t button = key.button == BSP_BTN_UP ? HEALTH_KEY_UP :
                                         key.button == BSP_BTN_DOWN ? HEALTH_KEY_DOWN : HEALTH_KEY_OK;
+            if (health_screen_key(&s_screen, button, event, now_ms(),
+                                  s_screen_mode == HEALTH_SCREEN_ASLEEP || s_screen_recovering))
+                continue;
             const health_action_t action = health_input_event(&s_input, button, event);
             if (action == HEALTH_ACTION_NONE) continue;
             if (action == HEALTH_ACTION_VOICE_STOP) {
@@ -425,6 +461,7 @@ void app_main(void)
         if (had_timer && rest > 0 && rest <= 3 && rest != previous_rest) effects(PLANK_EFFECT_PREP_1);
         previous_rest = rest;
         if (health_log_tick(&s_log, now)) {
+            health_screen_activity(&s_screen, now);
             if (had_interval && !s_log.interval_on) effects(HEALTH_SOUND_FINISH);
             else if (had_interval && was_work != s_log.interval_work)
                 effects(s_log.interval_work ? PLANK_EFFECT_START : HEALTH_SOUND_RELAX);
@@ -490,10 +527,20 @@ void app_main(void)
                 notice("音量设置未保存", now);
             }
         }
+        const health_voice_state_t voice = ui_voice_state();
+        const bool busy = s_model.state == PLANK_PREPARING || s_model.state == PLANK_RUNNING ||
+                          s_log.interval_on || s_log.timer_running ||
+                          atomic_load(&s_voice_wanted) || step_voice_owns_audio() ||
+                          voice == HEALTH_VOICE_RECORDING || voice == HEALTH_VOICE_THINKING ||
+                          voice == HEALTH_VOICE_SPEAKING;
         if (bsp_lvgl_lock(50)) {
-            health_ui_refresh(&s_log, &s_model, now, battery, health_portal_status(),
-                              s_audio_ok, s_buttons_ok, ui_voice_state());
+            const bool keep_awake = busy || !s_buttons_ok || health_ui_mode() == HEALTH_UI_PORTAL;
+            const health_screen_mode_t target = health_screen_target(&s_screen, now, keep_awake);
+            if (target != HEALTH_SCREEN_ASLEEP)
+                health_ui_refresh(&s_log, &s_model, now, battery, health_portal_status(),
+                                  s_audio_ok, s_buttons_ok, voice);
             bsp_lvgl_unlock();
+            screen_apply(target, now);
         }
         vTaskDelay(pdMS_TO_TICKS(20));
     }

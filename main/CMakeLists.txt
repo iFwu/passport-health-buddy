@@ -22,6 +22,7 @@ idf_component_register(
          "health_portal.c"
          "health_ui.c"
          "health_input.c"
+         "health_screen.c"
          "step_rx.c"
          "step_voice.c"
          "step_trace.c"
